@@ -1,9 +1,9 @@
 {
-  "name": "linxiaomiao-voice-button",
+  "name": "we_sing_laugh_and_live",
   "type": "module",
   "version": "1.0.0",
   "private": true,
-  "description": "SolidJS + Astro所构成的'渺の怪动静'",
+  "description": "SolidJS + Astro 所构成的「渺の怪动静 / 渺の歌单」",
   "scripts": {
     "dev": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "build": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
