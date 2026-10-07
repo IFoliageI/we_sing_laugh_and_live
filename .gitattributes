@@ -17,6 +17,7 @@
 *.css           text eol=lf
 *.json          text eol=lf
 *.md            text eol=lf
+*.sql           text eol=lf
 *.svg           text eol=lf
 *.conf          text eol=lf
 .gitignore      text eol=lf
@@ -28,6 +29,11 @@
 *.ps1           text eol=crlf
 
 # ---------- 二进制：不做换行符处理 ----------
+# ⚠️ 数据库必须是 binary！上方的 `* text=auto eol=lf` 会把 .db 当文本处理并改写换行符，
+#    那会直接损坏 SQLite 文件。
+*.db     binary
+*.sqlite binary
+*.db3    binary
 *.ico   binary
 *.png   binary
 *.jpg   binary

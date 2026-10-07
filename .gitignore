@@ -22,6 +22,13 @@ dist.tar
 dist.tar.gz
 site.tar.gz
 
+# ---------- 内容数据库 ----------
+# data/content.db 是内容源，需要【入库】——不要忽略它。
+# 只忽略 SQLite 运行时的临时文件：
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
 # ---------- 日志与临时文件 ----------
 *.log
 .dev.log

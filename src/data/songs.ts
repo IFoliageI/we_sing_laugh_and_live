@@ -1,118 +1,24 @@
-// 「渺の歌单」页面的歌曲数据。
-// 结构和首页的 src/data/voices.ts 完全一样（复用同一套类型），只是内容换成歌曲。
-//   path   = 音频路径（相对 public/audio，例如 'songs/歌名.mp3' 对应 public/audio/songs/歌名.mp3）
-//   zh     = 按钮上显示的文字（歌名）
-//   artist = 原唱作者（歌单页切到「原唱作者」展示方式时按它分组）
-//   info   = 悬停卡片信息：time=时间、title=标题/出处、note=备注、thumb=缩略图（均可留空）
-// 复制一条即可增加歌曲，删掉一条即可移除。
+// ============================================================
+//  歌单数据（渺の歌单 / 页面网址 /request）
+//
+//  ★ 数据已经迁移到 SQLite，本文件【不再手写内容】！
+//    内容源：data/content.db（section = 'song'）
+//    生成物：src/data/content.json（由 scripts/content-sync.mjs 自动生成）
+//
+//  改内容的方式同首页，见 src/data/voices.ts 顶部说明。
+// ============================================================
+import content from './content.json';
 import type { Voice, VoiceGroup } from './voices';
 
-export const songGroups: VoiceGroup[] = [
-  {
-    groupName: 'song_acg',
-    title: 'ACG',
-    voices: [
-      {
-        path: 'songs/翻唱_示例1.mp3',
-        zh: '示例：翻唱曲目（改成歌名）',
-        artist: '示例歌手 A',
-        info: {
-          time: '2024年5月1日 20:00',
-          title: '原曲：《示例一》',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-      {
-        path: 'songs/翻唱_示例2.mp3',
-        zh: '示例：翻唱曲目二（改成歌名）',
-        artist: '示例歌手 B',
-        info: {
-          time: '2024年5月2日 21:30',
-          title: '原曲：《示例二》',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-    ],
-  },
-  {
-    groupName: 'song_folk',
-    title: '民谣',
-    voices: [
-      {
-        path: 'songs/原创_示例1.mp3',
-        zh: '示例：原创曲目（改成歌名）',
-        artist: '渺渺渺',
-        info: {
-          time: '2024年6月1日 19:00',
-          title: '原创 · 第一首',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-      {
-        path: 'songs/原创_示例2.mp3',
-        zh: '示例：原创曲目二（改成歌名）',
-        artist: '渺渺渺',
-        info: {
-          time: '2024年6月2日 19:00',
-          title: '原创 · 第二首',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-    ],
-  },
-  {
-    groupName: 'song_rock',
-    title: '摇滚',
-    voices: [
-      {
-        path: 'songs/原创_示例1.mp3',
-        zh: '示例：原创曲目（改成歌名）',
-        artist: '渺渺渺',
-        info: {
-          time: '2024年6月1日 19:00',
-          title: '原创 · 第一首',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-      {
-        path: 'songs/原创_示例2.mp3',
-        zh: '示例：原创曲目二（改成歌名）',
-        artist: '渺渺渺',
-        info: {
-          time: '2024年6月2日 19:00',
-          title: '原创 · 第二首',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-    ],
-  },
-  {
-    groupName: 'song_pop',
-    title: '流行',
-    voices: [
-      {
-        path: 'songs/原创_示例1.mp3',
-        zh: '示例：原创曲目（改成歌名）',
-        artist: '渺渺渺',
-        info: {
-          time: '2024年6月1日 19:00',
-          title: '原创 · 第一首',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-      {
-        path: 'songs/原创_示例2.mp3',
-        zh: '示例：原创曲目二（改成歌名）',
-        artist: '渺渺渺',
-        info: {
-          time: '2024年6月2日 19:00',
-          title: '原创 · 第二首',
-          thumb: '/thumbs/placeholder.svg',
-        },
-      },
-    ],
-  },  
-];
+/**
+ * 歌单分组。
+ * 每条歌曲的字段含义：
+ *   path   = 音频路径（相对 public/audio，例如 'songs/歌名.mp3'）
+ *   zh     = 按钮上显示的文字（歌名）
+ *   artist = 原唱作者（歌单页切到「原唱作者」展示方式时按它分组）
+ *   info   = 悬停卡片信息：time=时间、title=标题/出处、note=备注、thumb=缩略图
+ */
+export const songGroups = content.song.groups as unknown as VoiceGroup[];
 
 // 把所有歌曲按「原唱作者」重新分组（歌单页切换到「原唱作者」展示方式时使用）。
 // 同一作者的歌会归到一个分组里；没填 artist 的归到「未知作者」。
@@ -132,5 +38,5 @@ export function groupSongsByArtist(groups: VoiceGroup[]): VoiceGroup[] {
   }));
 }
 
-// 歌单随机播放时「一首歌都没有」的提示文案
-export const SONG_EMPTY_HINT = '还没有歌曲哦，等主人有空放进 public/audio/songs 就能听啦';
+// 歌单随机播放时「一首歌都没有」的提示文案（数据库 settings 表可改）
+export const SONG_EMPTY_HINT = content.song.hint;

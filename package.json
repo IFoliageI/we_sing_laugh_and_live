@@ -5,11 +5,23 @@
   "private": true,
   "description": "SolidJS + Astro 所构成的「渺の怪动静 / 渺の歌单」",
   "scripts": {
-    "dev": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro dev",
-    "build": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "dev": "node scripts/content-sync.mjs && cross-env ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "node scripts/content-sync.mjs && cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
     "preview": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "preview:host": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview --host",
-    "astro": "astro"
+    "astro": "astro",
+
+    "content:sync": "node scripts/content-sync.mjs",
+    "content:stats": "node scripts/content-cli.mjs stats",
+    "content:groups": "node scripts/content-cli.mjs groups",
+    "content:list": "node scripts/content-cli.mjs list",
+    "content:add": "node scripts/content-cli.mjs add",
+    "content:rm-examples": "node scripts/content-cli.mjs rm-examples",
+    "content:check": "node scripts/content-cli.mjs check",
+    "content:verify": "node scripts/content-verify.mjs",
+    "content:dump": "node scripts/content-cli.mjs dump",
+    "content:migrate": "node scripts/content-migrate.mjs",
+    "content:help": "node scripts/content-cli.mjs help"
   },
   "dependencies": {
     "@astrojs/solid-js": "^4.4.1",
