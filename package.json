@@ -1,0 +1,22 @@
+{
+  "name": "linxiaomiao-voice-button",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SolidJS + Astro所构成的'渺の怪动静'",
+  "scripts": {
+    "dev": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "preview": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview",
+    "preview:host": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview --host",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/solid-js": "^4.4.1",
+    "astro": "^5.1.0",
+    "solid-js": "^1.9.0"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
+}

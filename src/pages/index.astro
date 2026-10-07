@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SoundBoard from '../components/SoundBoard.tsx';
+---
+<BaseLayout>
+  <div class="page-title">渺の怪动静</div>
+  <div class="page-sub">点一下，听听会发出什么怪动静</div>
+  <SoundBoard client:load />
+</BaseLayout>

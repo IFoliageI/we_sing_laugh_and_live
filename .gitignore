@@ -1,0 +1,44 @@
+# ============================================================
+#  we_sing_laugh_and_live  （渺の怪动静 / 渺の歌单）
+# ============================================================
+
+# ---------- 依赖与构建产物 ----------
+node_modules/
+dist/
+.astro/
+.pnpm-store/
+
+# ---------- 归档与打包（体积大，不入库）----------
+# 旧的 Nuxt 原项目归档
+Temp/
+Temp.7z
+# Windows 离线发布包工作目录
+发布包/
+*.zip
+*.7z
+*.tar
+*.tar.gz
+dist.tar
+dist.tar.gz
+site.tar.gz
+
+# ---------- 日志与临时文件 ----------
+*.log
+.dev.log
+.prev.log
+
+# ---------- 编辑器 / 系统 ----------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 音档 ----------
+# 默认【入库】。如果以后音档体积很大（超过几十 MB），
+# 取消下面几行的注释即可让 git 忽略音频：
+# public/audio/**/*.mp3
+# public/audio/**/*.wav
+# public/audio/**/*.m4a
+# public/audio/**/*.ogg
+# public/audio/**/*.flac

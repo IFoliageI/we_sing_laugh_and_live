@@ -1,0 +1,221 @@
+---
+import '../styles/global.css';
+import { site, sideLinks, friendLinks } from '../data/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title, description } = Astro.props;
+const pageTitle = title ?? site.title;
+const pageDesc = description ?? site.description;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={pageDesc} />
+    <meta name="keywords" content={site.keywords} />
+    <meta name="theme-color" content={site.themeColor} />
+    <meta property="og:site_name" content={site.title} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDesc} />
+    {site.socialImage && <meta property="og:image" content={site.socialImage} />}
+    <script is:inline>
+    // 彩蛋：刷新（reload）即清空彩蛋状态，实现“一刷新重新隐藏”；普通跨页跳转不触发。
+    (function () {
+      try {
+        var nav = performance.getEntriesByType('navigation');
+        if (nav.length && nav[0].type === 'reload') {
+          sessionStorage.removeItem('lmy-easter-unlock');
+          sessionStorage.removeItem('lmy-past');
+        }
+      } catch (e) {}
+    })();
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <button class="icon-btn sficon" id="drawer-open" aria-label="打开菜单">&#xE700;</button>
+        <div class="app-header__brand">
+          <img class="app-header__logo" src="/icons/index.ico" alt="临小渺" />
+          <a class="app-header__title" href="/">渺の播放器</a>
+        </div>
+        <span style="flex:1"></span>
+        <div class="theme-toggle-wrap">
+          <button class="icon-btn sficon" id="theme-toggle" aria-label="切换主题模式" aria-haspopup="true" aria-expanded="false">&#xE770;</button>
+          <div class="theme-menu" id="theme-menu" role="menu">
+            <button type="button" class="theme-menu__item" data-mode="light" role="menuitemradio" aria-checked="false">
+              <span class="ti sficon">&#xE706;</span><span>日间模式</span><span class="theme-menu__check sficon" data-check="light"></span>
+            </button>
+            <button type="button" class="theme-menu__item" data-mode="dark" role="menuitemradio" aria-checked="false">
+              <span class="ti sficon">&#xEC46;</span><span>夜间模式</span><span class="theme-menu__check sficon" data-check="dark"></span>
+            </button>
+            <button type="button" class="theme-menu__item" data-mode="system" role="menuitemradio" aria-checked="false">
+              <span class="ti sficon">&#xE770;</span><span>随系统切换</span><span class="theme-menu__check sficon" data-check="system"></span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- 侧边抽屉 -->
+      <div class="drawer-overlay" id="drawer-overlay" aria-hidden="true"></div>
+      <aside class="drawer" id="drawer" aria-hidden="true">
+        <div class="drawer__head">
+          <div class="drawer__brand">
+<!--            <span class="app-header__logo">🐾</span> -->
+            <span>这只是一个侧边栏咕</span>
+          </div>
+          <button class="icon-btn sficon" id="drawer-close" aria-label="关闭菜单">&#xE711;</button>
+        </div>
+
+        <div class="drawer__label">导航</div>
+        <nav>
+          <a class="drawer__item" href="/">
+            <span class="emoji sficon">&#xE80F;</span><span>渺の怪动静</span>
+          </a>
+          <a class="drawer__item" href="/request">
+            <span class="emoji sficon">&#xE8D6;</span><span>渺の歌单</span>
+          </a>          
+          <a class="drawer__item" href="/about">
+            <span class="emoji sficon">&#xE946;</span><span>关于</span>
+          </a>
+        </nav>
+
+        <div class="drawer__divider"></div>
+        <div class="drawer__label">关注老大谢谢咕</div>
+        <nav>
+          {
+            sideLinks.map((l) => (
+              <a class="drawer__item" href={l.url} target="_blank" rel="noopener">
+                <img class="drawer__link-icon" src={l.icon} alt="" width="20" height="20" /><span>{l.title}</span>
+              </a>
+            ))
+          }
+        </nav>
+
+        {friendLinks.length > 0 && (
+          <>
+            <div class="drawer__divider"></div>
+            <div class="drawer__label">以下是一些友链咕</div>
+            <nav>
+              {friendLinks.map((l) => (
+                <a class="drawer__item" href={l.url} target="_blank" rel="noopener">
+                  <img class="drawer__link-icon" src={l.icon} alt="" width="20" height="20" /><span>{l.title}</span>
+                </a>
+              ))}
+            </nav>
+          </>
+        )}
+      </aside>
+
+
+      <main class="app-main">
+        <slot />
+      </main>
+
+      <footer class="app-footer">
+        <span>©</span><span>本站全都是渺渺の怪动静哦~</span>
+      </footer>
+    </div>
+
+    <script>
+      // ---- 主题切换（原版下拉：日间/夜间/随系统） ----
+      const STORAGE_KEY = 'lmy-theme-mode';
+      // 顶栏按钮显示的图标。⚠️ 这里的码位必须和上面菜单里三个 <span class="ti sficon"> 保持一致，
+      // 否则就会出现「下拉菜单里的图标换了、顶栏还是老图标」。顺序：日间 / 夜间 / 随系统。
+      const MODE_ICON = { light: String.fromCharCode(0xE706), dark: String.fromCharCode(0xEC46), system: String.fromCharCode(0xE770) };
+      const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+      const toggle = document.getElementById('theme-toggle');
+      const menu = document.getElementById('theme-menu');
+      const items = Array.from(document.querySelectorAll('.theme-menu__item'));
+
+      function applyTheme(dark) {
+        document.documentElement.classList.toggle('dark', dark);
+      }
+      function resolveTheme(mode) {
+        if (mode === 'dark') return true;
+        if (mode === 'light') return false;
+        return darkMQ.matches;
+      }
+      function render() {
+        toggle.textContent = MODE_ICON[mode] || MODE_ICON.system;
+        items.forEach((it) => {
+          const m = it.dataset.mode;
+          it.classList.toggle('active', m === mode);
+          it.setAttribute('aria-checked', String(m === mode));
+          const ck = it.querySelector('[data-check]');
+          if (ck) ck.textContent = m === mode ? String.fromCharCode(0xE73E) : '';
+        });
+      }
+      let mode = 'system';
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved === 'light' || saved === 'dark' || saved === 'system') mode = saved;
+      } catch {}
+      applyTheme(resolveTheme(mode));
+      render();
+
+      // ---- 彩蛋：连续点击主题切换（未切换模式）解锁“往日” ----
+      const EG_UNLOCK_KEY = 'lmy-easter-unlock';
+      const EG_THRESHOLD = 15;
+      if (!sessionStorage.getItem(EG_UNLOCK_KEY)) sessionStorage.setItem(EG_UNLOCK_KEY, '0');
+      let egTaps = 0;
+
+      toggle?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = menu.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(isOpen));
+        // 只点按钮、不切换模式：每次都计数；切换模式时 items 处理器会将 egTaps 清零
+        egTaps++;
+        if (egTaps >= EG_THRESHOLD) {
+          try { sessionStorage.setItem(EG_UNLOCK_KEY, '1'); } catch (_) {}
+          egTaps = 0;
+        }
+      });
+      items.forEach((it) => {
+        it.addEventListener('click', () => {
+          mode = it.dataset.mode;
+          try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+          applyTheme(resolveTheme(mode));
+          render();
+          menu.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+          egTaps = 0; // 切换了模式：中断连点
+        });
+      });
+      document.addEventListener('click', () => {
+        menu.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+      darkMQ.addEventListener('change', () => {
+        if (mode === 'system') applyTheme(resolveTheme('system'));
+      });
+
+      // ---- 抽屉 ----
+      const drawer = document.getElementById('drawer');
+      const overlay = document.getElementById('drawer-overlay');
+      const openBtn = document.getElementById('drawer-open');
+      const closeBtn = document.getElementById('drawer-close');
+      function setDrawer(open) {
+        drawer.classList.toggle('open', open);
+        overlay.classList.toggle('open', open);
+        drawer.setAttribute('aria-hidden', String(!open));
+        overlay.setAttribute('aria-hidden', String(!open));
+        document.body.style.overflow = open ? 'hidden' : '';
+      }
+      openBtn?.addEventListener('click', () => setDrawer(true));
+      closeBtn?.addEventListener('click', () => setDrawer(false));
+      overlay?.addEventListener('click', () => setDrawer(false));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { setDrawer(false); menu.classList.remove('open'); }
+      });
+    </script>
+  </body>
+</html>

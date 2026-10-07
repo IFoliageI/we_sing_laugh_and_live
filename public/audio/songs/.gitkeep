@@ -1,0 +1,5 @@
+# 「渺の歌单」页面的歌曲文件放这个目录（public/audio/songs/）
+
+在 src/data/songs.ts 里把 path 写成 'songs/歌名.mp3' 就会读取本目录下的 歌名.mp3。
+
+这个文件只是用来占住空目录，可以删除。

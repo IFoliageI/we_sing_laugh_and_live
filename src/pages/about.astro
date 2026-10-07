@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { sideLinks } from '../data/site';
+
+// “音档素材来源”的链接：复用 site.ts 里“老大的主页”地址（改 site.ts 即可同步）
+const sourceUrl = sideLinks.find((l) => l.title.includes('主页'))?.url ?? sideLinks[0]?.url ?? '#';
+---
+<BaseLayout title="关于 - 渺の怪动静播放器">
+  <div class="page-title">渺の播放器</div>
+  <div class="page-sub">一点关于这座小站的介绍</div>
+  <div class="about-card">
+    <ul>
+      <li><b class="k">贡献者</b><span id="author-edit">一群充满热爱与激情的喵妙渺们,还有一只吃白饭的大肥鱼(*^▽^*)</span></li>
+      <li><b class="k">音档素材来源: </b><span><a href={sourceUrl} target="_blank" rel="noopener">老大的 B 站录播</a></span></li>
+    </ul>
+    <p style="color:var(--text-3); margin-top:18px; font-size:.9rem;">
+      本站仅为喵妙渺作品,不含任何商业用途,也与"临小渺"本尊无关。
+    </p>
+  </div>
+
+
+  <div class="about-card past-card" id="past-card" style="display:none;">
+    <label class="past-switch">
+      <span class="past-switch__label">往日?<span class="past-hint">说好了,我们要向前看,创造新的回忆的</span></span>
+      <span class="switch">
+        <input type="checkbox" id="past-toggle" aria-label="开启往日" />
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+      </span>
+    </label>
+  </div>
+
+  <script>
+    const UNLOCK = 'lmy-easter-unlock';
+    const PAST = 'lmy-past';
+    const card = document.getElementById('past-card');
+    const input = document.getElementById('past-toggle');
+    if (card && sessionStorage.getItem(UNLOCK) === '1') {
+      card.style.display = '';
+      try { input.checked = sessionStorage.getItem(PAST) === '1'; } catch {}
+      input.addEventListener('change', () => {
+        try { sessionStorage.setItem(PAST, input.checked ? '1' : '0'); } catch {}
+        const ev = new CustomEvent('lmy-past-change', { detail: input.checked });
+        window.dispatchEvent(ev);
+      });
+    }
+  </script>
+</BaseLayout>
