@@ -24,13 +24,16 @@ import {
   SECTIONS,
   DB_PATH,
   ROOT,
+  backupDatabase,
 } from './lib/db.mjs';
+import { addItem, exampleCleanupPlan, removeExamples, dumpTarget } from './lib/content-operations.mjs';
 
 // ---------- 参数解析：--key value / --flag ----------
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === '--') continue;
     if (a.startsWith('--')) {
       const key = a.slice(2);
       const next = argv[i + 1];
@@ -46,7 +49,7 @@ function parseArgs(argv) {
 
 const argv = parseArgs(process.argv.slice(2));
 const cmd = argv._[0] ?? 'help';
-const db = cmd === 'help' ? null : openDb();
+let db = null;
 
 const pad = (s, n) => {
   // 中文按两个字符宽度估算，保证表格对齐
@@ -151,85 +154,12 @@ function cmdList() {
   }
 }
 
-function cmdAdd() {
-  const section = argv.section ?? 'voice';
-  if (!SECTIONS[section]) {
-    console.error(`✗ --section 只能是 voice 或 song（收到：${section}）`);
-    process.exit(1);
-  }
-  const groupKey = argv.group;
-  const zh = argv.zh;
-  const audioPath = argv.path;
-  if (!groupKey || !zh || !audioPath) {
-    console.error('✗ 缺少必要参数。最少要写：--group <分组> --zh <按钮文字> --path <音频路径>');
-    console.error('  例：pnpm content:add --group noise --zh "怪叫·第一声" --path "noise/怪叫_1.mp3"');
-    console.error('  可用分组见：pnpm content:groups');
-    process.exit(1);
-  }
-
-  const g =
-    db.prepare('SELECT * FROM groups WHERE section = ? AND (group_name = ? OR title = ?)').get(section, groupKey, groupKey) ??
-    null;
-  if (!g) {
-    console.error(`✗ 在「${sectionLabel(section)}」里找不到分组：${groupKey}`);
-    console.error('  可用分组见：pnpm content:groups');
-    process.exit(1);
-  }
-
-  // 合集：给了 --stack 就找/建
-  let stackId = null;
-  if (typeof argv.stack === 'string') {
-    const found = db.prepare('SELECT id FROM stacks WHERE group_id = ? AND title = ?').get(g.id, argv.stack);
-    if (found) stackId = found.id;
-    else {
-      const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM stacks WHERE group_id = ?').get(g.id).m;
-      stackId = Number(
-        db.prepare('INSERT INTO stacks (group_id, title, sort_order, is_example) VALUES (?, ?, ?, ?)').run(
-          g.id,
-          argv.stack,
-          maxOrder + 1,
-          argv.example ? 1 : 0
-        ).lastInsertRowid
-      );
-      console.log(`· 新建合集「${argv.stack}」`);
-    }
-  }
-
-  const kind = argv.hidden ? 'hidden' : 'normal';
-  const dup = db.prepare('SELECT id FROM items WHERE group_id = ? AND path = ?').get(g.id, audioPath);
-  if (dup) {
-    console.error(`✗ 该分组里已存在同样的音频路径（条目 id=${dup.id}）：${audioPath}`);
-    process.exit(1);
-  }
-
-  const maxOrder =
-    db
-      .prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM items WHERE group_id = ? AND kind = ?')
-      .get(g.id, kind).m;
-
-  const r = db
-    .prepare(
-      `INSERT INTO items (group_id, stack_id, kind, path, zh, artist,
-                          info_time, info_title, info_note, info_thumb, sort_order, is_example)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      g.id,
-      stackId,
-      kind,
-      audioPath,
-      zh,
-      argv.artist ?? null,
-      argv.time ?? null,
-      argv.title ?? null,
-      argv.note ?? null,
-      argv.thumb ?? null,
-      maxOrder + 1,
-      argv.example ? 1 : 0
-    );
-
-  console.log(`✓ 已添加条目 id=${r.lastInsertRowid}`);
-  console.log(`    栏目：${sectionLabel(section)} / 分组：${g.title}`);
+async function cmdAdd() {
+  const backupFile = await backupDatabase(db);
+  const { id, group: g, stackId, kind, path: audioPath, zh } = addItem(db, argv);
+  console.log(`✓ 已添加条目 id=${id}`);
+  console.log(`    写入前备份：${backupFile}`);
+  console.log(`    栏目：${sectionLabel(g.section)} / 分组：${g.title}`);
   console.log(`    类型：${kind === 'hidden' ? '彩蛋音频' : stackId ? `合集成员（${argv.stack}）` : '独立按钮'}`);
   console.log(`    文字：${zh}`);
   console.log(`    音频：${audioPath}`);
@@ -241,42 +171,32 @@ function cmdAdd() {
   console.log('\n下一步：pnpm content:sync    （或直接 pnpm build，会自动同步）');
 }
 
-function cmdRmExamples() {
-  const items = db.prepare('SELECT COUNT(*) AS n FROM items WHERE is_example = 1').get().n;
-  const stacks = db.prepare('SELECT COUNT(*) AS n FROM stacks WHERE is_example = 1').get().n;
+async function cmdRmExamples() {
+  const plan = exampleCleanupPlan(db);
+  const items = plan.items.length;
+  const stacks = plan.removable;
 
   if (items === 0 && stacks === 0) {
     console.log('· 没有标记为「示例」的条目，无需清理。');
     return;
   }
 
-  if (!argv.yes) {
+  if (argv.yes !== true) {
     console.log('\n将要删除（当前是预览，未实际执行）：');
     console.log(`  · 示例音频条目：${items} 条`);
     console.log(`  · 示例合集    ：${stacks} 个`);
-    const rows = db
-      .prepare(
-        `SELECT g.title AS g, i.zh, i.path FROM items i JOIN groups g ON g.id = i.group_id
-         WHERE i.is_example = 1 ORDER BY g.section DESC, g.sort_order, i.id`
-      )
-      .all();
+    console.log(`  · 保留含真实内容的示例合集：${plan.retained} 个`);
     console.log('');
-    for (const r of rows) console.log(`    [${r.g}] ${r.zh}  →  ${r.path}`);
+    for (const r of plan.items) console.log(`    [${r.g}] ${r.zh}  →  ${r.path}`);
     console.log('\n确认要删除请加 --yes ：');
     console.log('  pnpm content:rm-examples -- --yes');
     return;
   }
 
-  db.exec('BEGIN');
-  try {
-    db.prepare('DELETE FROM items WHERE is_example = 1').run();
-    db.prepare('DELETE FROM stacks WHERE is_example = 1').run();
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-  console.log(`✓ 已清除示例音频条目 ${items} 条、示例合集 ${stacks} 个（分组本身保留）`);
+  const backupFile = await backupDatabase(db);
+  const removed = removeExamples(db);
+  console.log(`✓ 已清除示例音频条目 ${removed.items.length} 条、空示例合集 ${removed.removable} 个（分组与真实条目保留）`);
+  console.log(`    删除前备份：${backupFile}`);
   console.log('\n下一步：pnpm content:sync');
 }
 
@@ -303,7 +223,7 @@ function cmdCheck() {
 }
 
 function cmdDump() {
-  const file = path.join(ROOT, 'data', typeof argv._[1] === 'string' ? argv._[1] : 'content-dump.sql');
+  const file = dumpTarget(argv._[1]);
   exportDump(db, file);
   console.log(`✓ 已导出：${path.relative(ROOT, file)}`);
 }
@@ -340,15 +260,26 @@ content:add 的全部选项：
 }
 
 // ------------------------------------------------------------
-switch (cmd) {
-  case 'stats': cmdStats(); break;
-  case 'groups': cmdGroups(); break;
-  case 'list': cmdList(); break;
-  case 'add': cmdAdd(); break;
-  case 'rm-examples': cmdRmExamples(); break;
-  case 'check': cmdCheck(); break;
-  case 'dump': cmdDump(); break;
-  case 'help':
-  default: cmdHelp(); break;
+const commands = {
+  stats: cmdStats,
+  groups: cmdGroups,
+  list: cmdList,
+  add: cmdAdd,
+  'rm-examples': cmdRmExamples,
+  check: cmdCheck,
+  dump: cmdDump,
+  help: cmdHelp,
+};
+try {
+  if (!Object.hasOwn(commands, cmd)) throw new Error(`未知命令：${cmd}。请运行 pnpm content:help。`);
+  if (cmd !== 'help') {
+    const writes = cmd === 'add' || (cmd === 'rm-examples' && argv.yes === true);
+    db = openDb({ readOnly: !writes });
+  }
+  await commands[cmd]();
+} catch (error) {
+  console.error(`✗ ${error.message}`);
+  process.exitCode = 1;
+} finally {
+  db?.close();
 }
-if (db) db.close();

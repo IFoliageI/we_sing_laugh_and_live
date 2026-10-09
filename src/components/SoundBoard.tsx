@@ -1,15 +1,8 @@
-import { createSignal, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { voiceGroups, secretGroup, EMPTY_HINT, PAST_KEY, type VoiceGroup, type Voice, type VoiceInfo, type VoiceStack } from '../data/voices';
-
-interface Playing {
-  audio: HTMLAudioElement;
-  name: string;
-  path: string;
-  isPlaying: boolean;
-  progress: number;
-  loop: boolean;
-}
+import { voiceGroups, secretGroup, EMPTY_HINT, PAST_KEY, type VoiceGroup, type Voice, type VoiceStack } from '../data/voices';
+import { createAudioPlayer, type Playing } from '../lib/audio-player';
+import { findVoice, normalVoices, shareUrl } from '../lib/board-data';
 
 interface TipData {
   thumb?: string;
@@ -52,7 +45,6 @@ export function SoundBoard(props: BoardOptions = {}) {
 
   const [query, setQuery] = createSignal('');
   const [playing, setPlaying] = createSignal<Playing | null>(null);
-  const [playingGroup, setPlayingGroup] = createSignal<string | null>(null);
   const [loop, setLoop] = createSignal(false);
   // 记录「被折叠」的分组：默认全部展开，这样切换数据源（如歌单的展示方式）时新出现的分组也是展开的
   const [collapsed, setCollapsed] = createSignal<Set<string>>(new Set());
@@ -62,11 +54,28 @@ export function SoundBoard(props: BoardOptions = {}) {
   const [past, setPast] = createSignal(false); // 往日彩蛋开关
   const [tip, setTip] = createSignal<TipData | null>(null); // 悬停卡片
   const [stackCurrent, setStackCurrent] = createSignal<Record<string, number>>({}); // 各合集当前项索引
+  const player = createAudioPlayer(setPlaying, showToast);
+  let tipElement: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    const current = tip();
+    if (!current) return;
+    const frame = requestAnimationFrame(() => {
+      if (!tipElement || tip() !== current) return;
+      const { height } = tipElement.getBoundingClientRect();
+      const minimum = current.above ? height + 8 : 8;
+      const maximum = current.above ? window.innerHeight - 8 : window.innerHeight - height - 8;
+      const y = Math.max(minimum, Math.min(maximum, current.y));
+      if (y !== current.y) setTip({ ...current, y });
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
 
   // ---- 悬停卡片 ----
-  function showTip(el: HTMLElement, voice: Voice, pos?: string) {
+  function showTip(el: HTMLElement, voice: Voice | undefined, pos?: string) {
+    if (!voice) return;
     const info = voice.info;
-    if (!info && !pos) return;
+    if (!info && !pos && !voice.artist) return;
     const rect = el.getBoundingClientRect();
     const above = rect.top > 76; // 靠近页面顶部时改在下方弹出，避免被裁切
     setTip({
@@ -76,7 +85,7 @@ export function SoundBoard(props: BoardOptions = {}) {
       note: info?.note,
       artist: voice.artist,
       pos,
-      x: rect.left + rect.width / 2,
+      x: Math.max(118, Math.min(window.innerWidth - 118, rect.left + rect.width / 2)),
       y: above ? rect.top - 6 : rect.bottom + 6,
       above,
     });
@@ -93,7 +102,7 @@ export function SoundBoard(props: BoardOptions = {}) {
         ...g,
         voices: [...g.voices, ...(g.hiddenVoices ?? [])],
       })),
-      { ...secretRef(), voices: secretRef().hiddenVoices ?? [] },
+      { ...secretRef(), voices: [...secretRef().voices, ...(secretRef().hiddenVoices ?? [])] },
     ];
   });
 
@@ -121,8 +130,6 @@ export function SoundBoard(props: BoardOptions = {}) {
       .filter((g): g is VoiceGroup => g !== null);
   });
 
-  const visibleGroups = () => matchedGroups();
-
   // ---- 提示 ----------
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   function showToast(msg: string) {
@@ -137,31 +144,8 @@ export function SoundBoard(props: BoardOptions = {}) {
       showToast(noAudioText());
       return;
     }
-    playing()?.audio.pause();
-    setPlayingGroup(groupName);
-    const audio = new Audio(`/audio/${v.path}`);
-    audio.loop = loop();
-    const entry: Playing = {
-      audio,
-      name: v.zh,
-      path: v.path,
-      isPlaying: true,
-      progress: 0,
-      loop: loop(),
-    };
-    const bump = () => setPlaying((cur) => (cur === entry ? { ...entry } : cur));
-    audio.addEventListener('play', () => { entry.isPlaying = true; bump(); });
-    audio.addEventListener('pause', () => { entry.isPlaying = false; bump(); });
-    audio.addEventListener('ended', () => {
-      if (loop()) audio.play();
-      else { setPlaying(null); setPlayingGroup(null); }
-    });
-    audio.addEventListener('timeupdate', () => {
-      entry.progress = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
-      bump();
-    });
-    setPlaying(entry);
-    audio.play().catch(() => showToast('播放失败：文件不存在'));
+    hideTip();
+    player.play(v, groupName);
   }
   function playSound(group: VoiceGroup, idx: number) {
     playVoice(group.voices[idx], group.groupName);
@@ -170,9 +154,10 @@ export function SoundBoard(props: BoardOptions = {}) {
   // ---- 堆叠按钮（合集）----
   const stackTimers = new Map<string, ReturnType<typeof setTimeout>>();
   function stackKey(groupName: string, title: string, idx: number) {
-    return `${groupName}::${title || '合集'}::${idx}`;
+    return JSON.stringify([groupName, title, idx]);
   }
   function currentStackIndex(groupName: string, title: string, idx: number, total: number) {
+    if (total === 0) return 0;
     const cur = stackCurrent()[stackKey(groupName, title, idx)];
     return cur === undefined ? 0 : ((cur % total) + total) % total;
   }
@@ -188,11 +173,7 @@ export function SoundBoard(props: BoardOptions = {}) {
     if (!vs.length) return;
     const k = stackKey(group.groupName, stack.title ?? '', idx);
     const cur = stackCurrent()[k] ?? 0;
-    let i = Math.floor(Math.random() * vs.length);
-    if (vs.length > 1) {
-      let guard = 0;
-      while (i === cur && guard++ < 20) i = Math.floor(Math.random() * vs.length);
-    }
+    const i = vs.length > 1 ? (cur + 1 + Math.floor(Math.random() * (vs.length - 1))) % vs.length : 0;
     setStackCurrent((s) => ({ ...s, [k]: i }));
   }
   function onStackClick(group: VoiceGroup, stack: VoiceStack, idx: number) {
@@ -210,26 +191,22 @@ export function SoundBoard(props: BoardOptions = {}) {
   }
 
   function togglePlay() {
-    const p = playing();
-    if (!p) return;
-    if (p.audio.paused) p.audio.play();
-    else p.audio.pause();
+    player.toggle();
   }
 
   function stopSound() {
-    playing()?.audio.pause();
-    setPlaying(null);
-    setPlayingGroup(null);
+    player.stop();
   }
 
   function toggleLoop() {
     const next = !loop();
     setLoop(next);
-    playing() && (playing()!.audio.loop = next);
+    player.setLoop(next);
     showToast(next ? '已开启循环播放' : '已关闭循环播放');
   }
 
   function toggleGroup(name: string) {
+    hideTip();
     setCollapsed((s) => {
       const next = new Set(s);
       if (next.has(name)) next.delete(name);
@@ -238,27 +215,31 @@ export function SoundBoard(props: BoardOptions = {}) {
     });
   }
 
-  // 大类标签：点击始终切换展开/折叠，并滚动到对应分组
+  // 标签用于定位；重复点击不会把刚定位的内容折叠。
   function scrollToGroup(name: string) {
     const el = document.getElementById(`group-${name}`);
-    toggleGroup(name); // 展开则折叠，折叠则展开
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setCollapsed((current) => {
+      const next = new Set(current);
+      next.delete(name);
+      return next;
+    });
+    if (el) el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   }
 
   function randomPlay() {
-    const groups = baseGroups().filter((g) => g.voices.length > 0);
-    if (groups.length === 0) {
+    const candidates = baseGroups().flatMap((group) => normalVoices(group).map((voice) => ({ voice, groupName: group.groupName })));
+    if (candidates.length === 0) {
       showToast(emptyHint());
       return;
     }
-    const g = groups[Math.floor(Math.random() * groups.length)];
-    playSound(g, Math.floor(Math.random() * g.voices.length));
+    const choice = candidates[Math.floor(Math.random() * candidates.length)];
+    playVoice(choice.voice, choice.groupName);
   }
 
   async function share() {
     const p = playing();
     if (!p) return;
-    const url = `${location.origin}?btn=${encodeURIComponent(p.path)}&name=${encodeURIComponent(p.name)}`;
+    const url = shareUrl(location.href, { path: p.path, zh: p.name });
     try {
       await navigator.clipboard.writeText(url);
       showToast('已复制分享链接');
@@ -272,36 +253,55 @@ export function SoundBoard(props: BoardOptions = {}) {
     // 彩蛋“往日”开关状态（只在启用彩蛋的页面读取）
     if (secretOn()) {
       try { if (sessionStorage.getItem(PAST_KEY) === '1') setPast(true); } catch {}
-      window.addEventListener('lmy-past-change', () => {
+      const onPastChange = () => {
         try { setPast(sessionStorage.getItem(PAST_KEY) === '1'); } catch {}
-      });
+      };
+      window.addEventListener('lmy-past-change', onPastChange);
+      onCleanup(() => window.removeEventListener('lmy-past-change', onPastChange));
     }
     const params = new URLSearchParams(location.search);
     const btn = params.get('btn');
     if (btn) {
-      for (const g of baseGroups()) {
-        const found = g.voices.find((v) => v.path === btn);
-        if (found) {
-          playSound(g, g.voices.indexOf(found));
-          break;
-        }
-      }
+      const found = findVoice(baseGroups(), btn);
+      if (found) playVoice(found.voice, found.groupName);
     }
+    window.addEventListener('scroll', hideTip, { passive: true });
+    window.addEventListener('resize', hideTip);
+    onCleanup(() => {
+      window.removeEventListener('scroll', hideTip);
+      window.removeEventListener('resize', hideTip);
+    });
   });
 
-  onCleanup(() => stopSound());
+  onCleanup(() => {
+    clearTimeout(toastTimer);
+    stackTimers.forEach((timer) => clearTimeout(timer));
+    stackTimers.clear();
+    player.stop();
+  });
 
   const curProgress = () => playing()?.progress ?? 0;
+  const currentGroupName = createMemo(() => {
+    const current = playing();
+    if (!current) return null;
+    const groups = effectiveGroups();
+    const containsCurrent = (group: VoiceGroup) => normalVoices(group).some((voice) => voice.path === current.path);
+    return (groups.find((group) => group.groupName === current.groupName && containsCurrent(group))
+      ?? groups.find(containsCurrent))?.groupName ?? current.groupName;
+  });
+  const isCurrentVoice = (voice: Voice | undefined, groupName: string) =>
+    !!voice && playing()?.path === voice.path && currentGroupName() === groupName;
 
   return (
     <>
       {/* 搜索卡 */}
       <div class="search-card">
         <div class="search-box">
-          <span class="search-icon sficon" style="position:absolute;top:50%;left:16px;transform:translateY(-50%)">{String.fromCharCode(0xE721)}</span>
+          <span class="search-icon sficon" aria-hidden="true">{String.fromCharCode(0xE721)}</span>
           <input
             type="text"
             placeholder={searchPlaceholder()}
+            aria-label={searchPlaceholder()}
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
@@ -309,7 +309,7 @@ export function SoundBoard(props: BoardOptions = {}) {
             <button
               type="button"
               aria-label="清除"
-              class="sficon" style="position:absolute;top:50%;right:14px;transform:translateY(-50%)"
+              class="clear-icon sficon"
               onClick={() => setQuery('')}
             >{String.fromCharCode(0xE711)}</button>
           </Show>
@@ -319,14 +319,15 @@ export function SoundBoard(props: BoardOptions = {}) {
       {/* 空态（全局无匹配） */}
       <Show when={matchedGroups().length === 0}>
         <div class="no-result">
-          <span class="big">🥲</span>
-          没有搜到关于“{query()}”的{noResultWord()}
+          <Show when={query().trim()} fallback={emptyHint()}>
+            没有搜到关于“{query()}”的{noResultWord()}
+          </Show>
         </div>
       </Show>
 
       {/* 大类标签栏（原版：点击跳转到对应分组） */}
       <Show when={matchedGroups().length > 1}>
-        <div class="tabs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;">
+        <div class="tabs">
           <For each={matchedGroups()}>
             {(group) => (
               <button type="button" class="tab" onClick={() => scrollToGroup(group.groupName)}>
@@ -342,20 +343,20 @@ export function SoundBoard(props: BoardOptions = {}) {
         <For each={matchedGroups()}>
           {(group) => {
             const isOpen = () => !collapsed().has(group.groupName);
-            const groupPlaying = () => playingGroup() === group.groupName && !!playing();
+            const groupPlaying = () => currentGroupName() === group.groupName;
             const totalBtns = () => group.voices.length + (group.stacks?.length ?? 0);
             return (
               <div
                 class="panel"
                 classList={{ open: isOpen() }}
                 id={`group-${group.groupName}`}
-                style="scroll-margin-top: 84px;"
               >
                 <button
                   type="button"
                   class="panel__head"
                   onClick={() => toggleGroup(group.groupName)}
                   aria-expanded={isOpen()}
+                  aria-controls={`body-${group.groupName}`}
                 >
                   <span class="panel__title">{group.title}</span>
                   <span class="panel__count">
@@ -363,7 +364,7 @@ export function SoundBoard(props: BoardOptions = {}) {
                   </span>
                   <span class="panel__chevron sficon">{String.fromCharCode(0xE70D)}</span>
                 </button>
-                <div class="panel__body">
+                <div class="panel__body" id={`body-${group.groupName}`} inert={!isOpen()}>
                   <div class="panel__body-inner">
                     <Show when={totalBtns() > 0} fallback={<div class="group-empty">{emptyGroupText()}</div>}>
                       <div class="panel__grid">
@@ -373,18 +374,20 @@ export function SoundBoard(props: BoardOptions = {}) {
                               <button
                                 type="button"
                                 class="sound-btn"
-                                classList={{ playing: playing()?.name === voice.zh }}
+                                classList={{ playing: isCurrentVoice(voice, group.groupName) }}
                                 onClick={() => playSound(group, i())}
                                 onMouseEnter={(e) => showTip(e.currentTarget, voice)}
                                 onMouseLeave={hideTip}
                                 onMouseDown={hideTip}
+                                onFocus={(e) => showTip(e.currentTarget, voice)}
+                                onBlur={hideTip}
                                 data-sound={voice.zh}
                               >
-                                <Show when={playing()?.name === voice.zh}>
+                                <Show when={isCurrentVoice(voice, group.groupName)}>
                                   <span class="pulse-dot" />
                                 </Show>
                                 <span>{voice.zh}</span>
-                                <Show when={playing()?.name === voice.zh}>
+                                <Show when={isCurrentVoice(voice, group.groupName)}>
                                   <span class="progress" style={`--progress: ${curProgress()}%`} />
                                 </Show>
                               </button>
@@ -400,19 +403,23 @@ export function SoundBoard(props: BoardOptions = {}) {
                                 <button
                                   type="button"
                                   class="sound-btn sound-stack"
-                                  classList={{ playing: playing()?.name === curVoice().zh }}
+                                  classList={{ playing: isCurrentVoice(curVoice(), group.groupName) }}
+                                  disabled={stack.voices.length === 0}
+                                  aria-label={stack.voices.length ? undefined : `${stack.title || '合集'}（暂无音频）`}
                                   onClick={() => onStackClick(group, stack, si())}
                                   onDblClick={() => onStackDbl(group, stack, si())}
                                   onMouseEnter={(e) => showTip(e.currentTarget, curVoice(), `第 ${curIdx() + 1}/${stack.voices.length} 个`)}
                                   onMouseLeave={hideTip}
                                   onMouseDown={hideTip}
+                                  onFocus={(e) => showTip(e.currentTarget, curVoice(), `第 ${curIdx() + 1}/${stack.voices.length} 个`)}
+                                  onBlur={hideTip}
                                 >
-                                  <Show when={playing()?.name === curVoice().zh}>
+                                  <Show when={isCurrentVoice(curVoice(), group.groupName)}>
                                     <span class="pulse-dot" />
                                   </Show>
                                   <span class="stack-title">{stack.title || '合集'}</span>
                                   <span class="stack-count">{stack.voices.length}</span>
-                                  <Show when={playing()?.name === curVoice().zh}>
+                                  <Show when={isCurrentVoice(curVoice(), group.groupName)}>
                                     <span class="progress" style={`--progress: ${curProgress()}%`} />
                                   </Show>
                                 </button>
@@ -439,18 +446,19 @@ export function SoundBoard(props: BoardOptions = {}) {
               <div class="bottom-sheet__thumbs sficon">{String.fromCharCode(0xE767)}</div>
               <div class="bottom-sheet__info">
                 <div class="bottom-sheet__name">{p().name}</div>
-                <div class="bottom-sheet__status">{p().isPlaying ? '播放中' : '已暂停'}</div>
+                <div class="bottom-sheet__status" role="status">{p().isLoading ? '加载中' : p().isPlaying ? '播放中' : '已暂停'}</div>
               </div>
-              <Show when={hasClipboard()}>
-                <button type="button" class="icon-btn sficon" onClick={share} aria-label="分享">{String.fromCharCode(0xE72D)}</button>
+              <Show when={hasClipboard() && baseGroups().some((group) =>
+                group.groupName === currentGroupName() && normalVoices(group).some((voice) => voice.path === p().path))}>
+                <button type="button" class="icon-btn sficon" onClick={share} aria-label="分享" title="分享">{String.fromCharCode(0xE72D)}</button>
               </Show>
-              <button type="button" class="icon-btn sficon" onClick={toggleLoop} aria-label="循环">
+              <button type="button" class="icon-btn sficon" onClick={toggleLoop} aria-label="循环" aria-pressed={loop()} title="循环">
                 {loop() ? String.fromCharCode(0xE8EE) : String.fromCharCode(0xE8CD)}
               </button>
-              <button type="button" class="icon-btn sficon" onClick={togglePlay} aria-label="播放/暂停">
+              <button type="button" class="icon-btn sficon" onClick={togglePlay} aria-label={p().isPlaying ? '暂停' : '播放'} title={p().isPlaying ? '暂停' : '播放'}>
                 {p().isPlaying ? String.fromCharCode(0xE769) : String.fromCharCode(0xE768)}
               </button>
-              <button type="button" class="icon-btn sficon" onClick={stopSound} aria-label="停止">{String.fromCharCode(0xE711)}</button>
+              <button type="button" class="icon-btn sficon" onClick={stopSound} aria-label="停止" title="停止">{String.fromCharCode(0xE711)}</button>
             </div>
           </div>
         )}
@@ -459,17 +467,17 @@ export function SoundBoard(props: BoardOptions = {}) {
       {/* FAB */}
       <div class="fab-row">
         <Show when={fabOpen()}>
-          <button type="button" class="fab sub fab-enter sficon" onClick={toggleLoop} title="循环">{String.fromCharCode(0xE8EE)}</button>
-          <button type="button" class="fab sub fab-enter sficon" onClick={randomPlay} title="随机播放">{String.fromCharCode(0xE8B1)}</button>
+          <button type="button" class="fab sub fab-enter sficon" onClick={toggleLoop} title="循环" aria-label="循环" aria-pressed={loop()}>{String.fromCharCode(0xE8EE)}</button>
+          <button type="button" class="fab sub fab-enter sficon" onClick={randomPlay} title="随机播放" aria-label="随机播放">{String.fromCharCode(0xE8B1)}</button>
         </Show>
-        <button type="button" class="fab main sficon" onClick={() => setFabOpen(!fabOpen())} aria-label={fabOpen() ? '收起' : '更多功能'}>
+        <button type="button" class="fab main sficon" onClick={() => setFabOpen(!fabOpen())} aria-label={fabOpen() ? '收起' : '更多功能'} aria-expanded={fabOpen()} title={fabOpen() ? '收起' : '更多功能'}>
           {fabOpen() ? String.fromCharCode(0xE711) : String.fromCharCode(0xE713)}
         </button>
       </div>
 
       {/* Toast */}
       <Show when={toast()}>
-        <div class="toast">
+        <div class="toast" role="status">
           <span class="sficon">{String.fromCharCode(0xE73E)}</span>
           {toast()}
         </div>
@@ -481,6 +489,7 @@ export function SoundBoard(props: BoardOptions = {}) {
           {(t) => (
             <div
               class="sound-tip"
+              ref={tipElement}
               classList={{ below: !t().above }}
               style={{ left: t().x + 'px', top: t().y + 'px' }}
             >

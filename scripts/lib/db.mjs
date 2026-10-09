@@ -4,7 +4,8 @@
 //  - 读取分组 / 合集 / 条目，拼装成前端需要的结构
 //  - 供 content-sync.mjs / content-cli.mjs / content-migrate.mjs 复用
 // ============================================================
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, backup } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,18 +26,66 @@ export const SECTIONS = {
 };
 
 /** 打开数据库；create=true 时会先建表 */
-export function openDb({ create = false } = {}) {
-  if (!create && !fs.existsSync(DB_PATH)) {
+export function openDb({ create = false, readOnly = false, dbPath = DB_PATH, schemaPath = SCHEMA_PATH } = {}) {
+  if (!create && !fs.existsSync(dbPath)) {
     throw new Error(
-      `数据库不存在：${DB_PATH}\n` +
-        `请先执行迁移：node scripts/content-migrate.mjs`
+      `数据库不存在：${dbPath}\n` +
+        '请从备份恢复，或执行 pnpm content:migrate 从 SQL 快照恢复。'
     );
   }
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const db = new DatabaseSync(DB_PATH);
-  db.exec('PRAGMA foreign_keys = ON;');
-  if (create) db.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
-  return db;
+  if (create && readOnly) throw new Error('只读连接不能创建数据库。');
+  if (!readOnly) fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  const db = new DatabaseSync(dbPath, { readOnly });
+  try {
+    db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+    if (create) db.exec(fs.readFileSync(schemaPath, 'utf8'));
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+/** SQLite 在线备份包含已提交的 WAL 内容，不能用普通文件复制替代。 */
+export async function backupDatabase(db, dbPath = DB_PATH) {
+  const dir = path.join(path.dirname(dbPath), 'backups');
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const target = path.join(dir, `content-${stamp}-${randomUUID()}.db`);
+  try {
+    await backup(db, target);
+    return target;
+  } catch (error) {
+    fs.rmSync(target, { force: true });
+    throw error;
+  }
+}
+
+/** 失败时整笔回滚，避免留下未完成的合集或条目。 */
+export function withTransaction(db, work) {
+  db.exec('BEGIN IMMEDIATE;');
+  try {
+    const result = work();
+    db.exec('COMMIT;');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK;');
+    throw error;
+  }
+}
+
+/** 只改写有变化的生成物；同目录替换不会暴露半份内容。 */
+export function writeIfChanged(filePath, next) {
+  if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === next) return false;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporary = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, next, 'utf8');
+    fs.renameSync(temporary, filePath);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
+  return true;
 }
 
 /** 把一行 item 转成前端 Voice 结构（空字段不输出，保持 JSON 干净） */
@@ -79,7 +128,11 @@ export function loadSection(db, section) {
       return obj;
     });
 
-    const node = { groupName: g.group_name, title: g.title, voices: normals.filter((i) => i.stack_id === null).map(toVoice) };
+    const node = {
+      groupName: g.group_name,
+      title: g.title,
+      voices: normals.filter((i) => i.stack_id === null).map(toVoice),
+    };
     if (stacks.length > 0) node.stacks = stacks;
     if (hiddens.length > 0) node.hiddenVoices = hiddens.map(toVoice);
 
@@ -118,7 +171,7 @@ export function groupStats(db, section) {
 
 /** 扫描 public/audio 下的所有音频文件，返回相对路径数组 */
 export function listAudioFiles() {
-  const exts = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac']);
+  const exts = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.oga', '.opus', '.flac', '.aac', '.wma']);
   const out = [];
   const walk = (dir) => {
     if (!fs.existsSync(dir)) return;
@@ -146,7 +199,7 @@ export function exportDump(db, filePath) {
     '-- ============================================================',
     '--  内容快照（由 scripts/content-sync.mjs 自动生成，请勿手工编辑）',
     '--  内容源是 data/content.db；本文件用于 git diff 审阅 / 备份。',
-    '--  重建：sqlite3 data/content.db < data/content-dump.sql',
+    '--  恢复缺失数据库：pnpm content:migrate（已有数据库不会被覆盖）',
     '-- ============================================================',
     'PRAGMA foreign_keys = ON;',
     'BEGIN;',
@@ -164,17 +217,20 @@ export function exportDump(db, filePath) {
   }
   for (const i of db.prepare('SELECT * FROM items ORDER BY id').all()) {
     lines.push(
-      `INSERT INTO items (id, group_id, stack_id, kind, path, zh, artist, info_time, info_title, info_note, info_thumb, sort_order, is_example) VALUES (${i.id}, ${i.group_id}, ${i.stack_id ?? 'NULL'}, ${q(i.kind)}, ${q(i.path)}, ${q(i.zh)}, ${q(i.artist)}, ${q(i.info_time)}, ${q(i.info_title)}, ${q(i.info_note)}, ${q(i.info_thumb)}, ${i.sort_order}, ${i.is_example});`
+      `INSERT INTO items (id, group_id, stack_id, kind, path, zh, artist, info_time, info_title, info_note, info_thumb, sort_order, is_example, created_at) VALUES (${i.id}, ${i.group_id}, ${i.stack_id ?? 'NULL'}, ${q(i.kind)}, ${q(i.path)}, ${q(i.zh)}, ${q(i.artist)}, ${q(i.info_time)}, ${q(i.info_title)}, ${q(i.info_note)}, ${q(i.info_thumb)}, ${i.sort_order}, ${i.is_example}, ${q(i.created_at)});`
     );
   }
   for (const s of db.prepare('SELECT * FROM settings ORDER BY key').all()) {
     lines.push(`INSERT INTO settings (key, value) VALUES (${q(s.key)}, ${q(s.value)});`);
   }
+  // 保留已删除内容的最高 id，避免恢复后复用旧 id。
+  lines.push("DELETE FROM sqlite_sequence WHERE name IN ('groups', 'stacks', 'items');");
+  for (const sequence of db.prepare(
+    "SELECT name, seq FROM sqlite_sequence WHERE name IN ('groups', 'stacks', 'items') ORDER BY name"
+  ).all()) {
+    lines.push(`INSERT INTO sqlite_sequence (name, seq) VALUES (${q(sequence.name)}, ${sequence.seq});`);
+  }
   lines.push('COMMIT;', '');
 
-  const next = lines.join('\n');
-  if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === next) return false;
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, next, 'utf8');
-  return true;
+  return writeIfChanged(filePath, lines.join('\n'));
 }

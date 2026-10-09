@@ -64,14 +64,14 @@ export interface VoiceGroup {
 // ---------- 以下是自动生成的数据，请勿手工编辑（改 data/content.db） ----------
 
 /** 首页分组（数据库里 section = 'voice' 且 is_secret = 0 的分组） */
-export const voiceGroups = content.voice.groups as unknown as VoiceGroup[];
+export const voiceGroups = content.voice.groups as VoiceGroup[];
 
 /** 彩蛋分组：仅当“往日”开关打开时出现在首页底部 */
 export const secretGroup = (content.voice.secretGroup ?? {
   groupName: 'forgotten',
   title: '往日',
   voices: [],
-}) as unknown as VoiceGroup;
+}) as VoiceGroup;
 
 /** 随机播放下限守卫：无内容时给出提示文案（数据库 settings 表可改） */
 export const EMPTY_HINT = content.voice.hint;

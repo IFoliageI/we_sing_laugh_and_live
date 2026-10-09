@@ -28,9 +28,12 @@ site.tar.gz
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+# 本机内容备份，不作为部署产物
+data/backups/
 
 # ---------- 日志与临时文件 ----------
 *.log
+.checks/
 .dev.log
 .prev.log
 

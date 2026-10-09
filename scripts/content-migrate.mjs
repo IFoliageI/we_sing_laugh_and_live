@@ -1,108 +1,47 @@
-// ============================================================
-//  一次性迁移：把 src/data/voices.ts 与 songs.ts 的现有内容导入 SQLite
-//
-//  用法：
-//      node scripts/content-migrate.mjs            # 首次创建 data/content.db
-//      node scripts/content-migrate.mjs --force    # 覆盖重建（会清空现有内容！）
-//
-//  说明：
-//  - 现有数据全部是占位「示例」，因此入库时统一打上 is_example = 1，
-//    以后可用 `pnpm content:rm-examples -- --yes` 一键清除。
-//  - 分组（悲鸣 / 怪叫 / ACG …）属于结构性骨架，不打示例标记。
-//  - Node 会直接类型擦除地导入 .ts，因此迁移是「零转录误差」的。
-// ============================================================
+// 旧 TS 数据已经改成读取生成物，不能再作为独立迁移源。
+// 此命令仅从 SQL 快照恢复缺失的数据库，绝不覆盖现有内容。
 import fs from 'node:fs';
-import { openDb, setSetting, DB_PATH } from './lib/db.mjs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { openDb, DB_PATH, SCHEMA_PATH, DATA_DIR } from './lib/db.mjs';
 
-const force = process.argv.includes('--force');
-
-if (fs.existsSync(DB_PATH)) {
-  if (!force) {
-    console.error(`✗ 数据库已存在：${DB_PATH}`);
-    console.error('  如需覆盖重建，请加 --force（会清空现有内容）');
-    process.exit(1);
+export function restoreDatabase({
+  dbPath = DB_PATH,
+  schemaPath = SCHEMA_PATH,
+  dumpPath = path.join(DATA_DIR, 'content-dump.sql'),
+} = {}) {
+  if (fs.existsSync(dbPath)) throw new Error('数据库已存在，拒绝覆盖。请先备份并人工确认恢复方案。');
+  const dump = fs.readFileSync(dumpPath, 'utf8');
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  const temporary = `${dbPath}.${randomUUID()}.tmp`;
+  let db;
+  try {
+    db = openDb({ create: true, dbPath: temporary, schemaPath });
+    db.exec(dump);
+    if (db.isTransaction) throw new Error('SQL 快照缺少 COMMIT，拒绝恢复未提交的内容。');
+    const integrity = db.prepare('PRAGMA integrity_check;').get().integrity_check;
+    if (integrity !== 'ok' || db.prepare('PRAGMA foreign_key_check;').all().length) {
+      throw new Error('SQL 快照未通过完整性检查。');
+    }
+    db.prepare('SELECT id, group_id, stack_id, path, zh, created_at FROM items').all();
+    db.close();
+    db = undefined;
+    fs.copyFileSync(temporary, dbPath, fs.constants.COPYFILE_EXCL);
+    return dbPath;
+  } finally {
+    db?.close();
+    for (const suffix of ['', '-journal', '-wal', '-shm']) fs.rmSync(temporary + suffix, { force: true });
   }
-  fs.rmSync(DB_PATH);
-  console.log('· 已删除旧数据库（--force）');
 }
 
-// 直接导入现有 TS 数据（Node 原生类型擦除）
-const voicesMod = await import('../src/data/voices.ts');
-const songsMod = await import('../src/data/songs.ts');
-
-const db = openDb({ create: true });
-
-const insGroup = db.prepare(
-  'INSERT INTO groups (section, group_name, title, sort_order, is_secret) VALUES (?, ?, ?, ?, ?)'
-);
-const insStack = db.prepare(
-  'INSERT INTO stacks (group_id, title, sort_order, is_example) VALUES (?, ?, ?, 1)'
-);
-const insItem = db.prepare(
-  `INSERT INTO items (group_id, stack_id, kind, path, zh, artist,
-                      info_time, info_title, info_note, info_thumb, sort_order, is_example)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
-);
-
-let nGroups = 0;
-let nStacks = 0;
-let nItems = 0;
-
-/** 插入一条音频（stackId 为 null 表示独立按钮） */
-function addItem(groupId, stackId, kind, v, order) {
-  const info = v.info ?? {};
-  insItem.run(
-    groupId,
-    stackId,
-    kind,
-    v.path,
-    v.zh,
-    v.artist ?? null,
-    info.time ?? null,
-    info.title ?? null,
-    info.note ?? null,
-    info.thumb ?? null,
-    order
-  );
-  nItems++;
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    if (process.argv.slice(2).length) throw new Error('不支持 --force 或其他覆盖参数；现有数据库不会被删除。');
+    console.log(`已从 SQL 快照恢复：${restoreDatabase()}`);
+    console.log('下一步：pnpm content:sync');
+  } catch (error) {
+    console.error(`恢复未执行：${error.message}`);
+    process.exitCode = 1;
+  }
 }
-
-/** 插入一个分组（含 voices / stacks / hiddenVoices） */
-function addGroup(section, g, order, isSecret = 0) {
-  const r = insGroup.run(section, g.groupName, g.title, order, isSecret);
-  const gid = Number(r.lastInsertRowid);
-  nGroups++;
-
-  (g.voices ?? []).forEach((v, i) => addItem(gid, null, 'normal', v, i));
-
-  (g.stacks ?? []).forEach((s, si) => {
-    const sr = insStack.run(gid, s.title ?? null, si);
-    const sid = Number(sr.lastInsertRowid);
-    nStacks++;
-    (s.voices ?? []).forEach((v, i) => addItem(gid, sid, 'normal', v, i));
-  });
-
-  (g.hiddenVoices ?? []).forEach((v, i) => addItem(gid, null, 'hidden', v, i));
-
-  return gid;
-}
-
-// ---------- 首页「渺の怪动静」 ----------
-voicesMod.voiceGroups.forEach((g, i) => addGroup('voice', g, i));
-if (voicesMod.secretGroup) {
-  addGroup('voice', voicesMod.secretGroup, voicesMod.voiceGroups.length, 1);
-}
-setSetting(db, 'voice_empty_hint', voicesMod.EMPTY_HINT);
-
-// ---------- 歌单页「渺の歌单」 ----------
-songsMod.songGroups.forEach((g, i) => addGroup('song', g, i));
-setSetting(db, 'song_empty_hint', songsMod.SONG_EMPTY_HINT);
-
-console.log('');
-console.log('✓ 迁移完成');
-console.log(`  数据库    : ${DB_PATH}`);
-console.log(`  分组      : ${nGroups}`);
-console.log(`  合集      : ${nStacks}`);
-console.log(`  音频条目  : ${nItems}（全部标记为示例，可一键清除）`);
-console.log('');
-console.log('下一步：node scripts/content-sync.mjs   生成 src/data/content.json');

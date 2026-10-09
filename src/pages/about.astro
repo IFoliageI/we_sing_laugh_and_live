@@ -33,8 +33,10 @@ const sourceUrl = sideLinks.find((l) => l.title.includes('主页'))?.url ?? side
     const UNLOCK = 'lmy-easter-unlock';
     const PAST = 'lmy-past';
     const card = document.getElementById('past-card');
-    const input = document.getElementById('past-toggle');
-    if (card && sessionStorage.getItem(UNLOCK) === '1') {
+    const input = document.getElementById('past-toggle') as HTMLInputElement | null;
+    let unlocked = false;
+    try { unlocked = sessionStorage.getItem(UNLOCK) === '1'; } catch {}
+    if (card && input && unlocked) {
       card.style.display = '';
       try { input.checked = sessionStorage.getItem(PAST) === '1'; } catch {}
       input.addEventListener('change', () => {

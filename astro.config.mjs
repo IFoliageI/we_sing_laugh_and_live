@@ -5,5 +5,6 @@ import solidJs from '@astrojs/solid-js';
 export default defineConfig({
   integrations: [solidJs()],
   output: 'static',
+  devToolbar: { enabled: false },
   // 如需生成带绝对 URL 的 SEO 资源，请在下方填入正式域名
 });
