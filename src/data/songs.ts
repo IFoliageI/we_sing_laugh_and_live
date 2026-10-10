@@ -14,7 +14,7 @@ export { groupSongsByArtist } from '../lib/board-data';
 /**
  * 歌单分组。
  * 每条歌曲的字段含义：
- *   path   = 音频路径（相对 public/audio，例如 'songs/歌名.mp3'）
+ *   path   = 相对 public/audio 的路径（如 'songs/歌名.mp3'）或 HTTP(S) 直链
  *   zh     = 按钮上显示的文字（歌名）
  *   artist = 原唱作者（歌单页切到「原唱作者」展示方式时按它分组）
  *   info   = 悬停卡片信息：time=时间、title=标题/出处、note=备注、thumb=缩略图

@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { site, sideLinks, friendLinks } from '../data/site';
+import { imageUrl } from '../lib/media';
 
 interface Props {
   title?: string;
@@ -25,7 +26,7 @@ const pageDesc = description ?? site.description;
     <meta property="og:type" content="website" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDesc} />
-    {site.socialImage && <meta property="og:image" content={site.socialImage} />}
+    {site.socialImage && <meta property="og:image" content={imageUrl(site.socialImage)} />}
     <script is:inline>
     // 彩蛋：刷新（reload）即清空彩蛋状态，实现“一刷新重新隐藏”；普通跨页跳转不触发。
     (function () {
@@ -51,7 +52,7 @@ const pageDesc = description ?? site.description;
       <header class="app-header">
         <button type="button" class="icon-btn sficon" id="drawer-open" aria-label="打开菜单" title="打开菜单" aria-expanded="false" aria-controls="drawer">&#xE700;</button>
         <div class="app-header__brand">
-          <img class="app-header__logo" src="/icons/index.ico" alt="临小渺" />
+          <img class="app-header__logo" src={imageUrl(site.logoImage)} alt="临小渺" />
           <a class="app-header__title" href="/">{site.brandTitle}</a>
         </div>
         <span class="app-header__spacer"></span>
@@ -100,7 +101,7 @@ const pageDesc = description ?? site.description;
           {
             sideLinks.map((l) => (
               <a class="drawer__item" href={l.url} target="_blank" rel="noopener">
-                <img class="drawer__link-icon" src={l.icon} alt="" width="20" height="20" /><span>{l.title}</span>
+                <img class="drawer__link-icon" src={imageUrl(l.icon)} alt="" width="20" height="20" /><span>{l.title}</span>
               </a>
             ))
           }
@@ -113,7 +114,7 @@ const pageDesc = description ?? site.description;
             <nav>
               {friendLinks.map((l) => (
                 <a class="drawer__item" href={l.url} target="_blank" rel="noopener">
-                  <img class="drawer__link-icon" src={l.icon} alt="" width="20" height="20" /><span>{l.title}</span>
+                  <img class="drawer__link-icon" src={imageUrl(l.icon)} alt="" width="20" height="20" /><span>{l.title}</span>
                 </a>
               ))}
             </nav>

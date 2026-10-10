@@ -24,12 +24,12 @@ export interface VoiceInfo {
   title?: string;
   // 其他备注（可选）
   note?: string;
-  // 缩略图地址：相对 public 的路径（如 /thumbs/xxx.png）或完整 URL；不填则不显示缩略图
+  // 缩略图：public 路径（如 /thumbs/xxx.png）或 HTTP(S) 图床直链；不填则不显示
   thumb?: string;
 }
 
 export interface Voice {
-  // 音频相对 public/audio 的路径，如 cry_lyrics/啊.mp3
+  // 音频：相对 public/audio 的路径，或完整 HTTP(S) OSS/CDN 直链
   path: string;
   // 按钮上显示的文字
   zh: string;

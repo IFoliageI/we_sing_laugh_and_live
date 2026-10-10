@@ -27,6 +27,7 @@ import {
   backupDatabase,
 } from './lib/db.mjs';
 import { addItem, exampleCleanupPlan, removeExamples, dumpTarget } from './lib/content-operations.mjs';
+import { isRemoteMediaUrl } from '../src/lib/media-url.mjs';
 
 // ---------- 参数解析：--key value / --flag ----------
 function parseArgs(argv) {
@@ -165,7 +166,7 @@ async function cmdAdd() {
   console.log(`    音频：${audioPath}`);
 
   const file = path.join(ROOT, 'public', 'audio', audioPath);
-  if (!fs.existsSync(file)) {
+  if (!isRemoteMediaUrl(audioPath) && !fs.existsSync(file)) {
     console.log(`\n⚠ 注意：public/audio/${audioPath} 目前还不存在，记得把音频文件放进去。`);
   }
   console.log('\n下一步：pnpm content:sync    （或直接 pnpm build，会自动同步）');
@@ -203,13 +204,15 @@ async function cmdRmExamples() {
 function cmdCheck() {
   const rows = db.prepare('SELECT i.id, i.path, i.zh, g.title AS g FROM items i JOIN groups g ON g.id = i.group_id ORDER BY i.path').all();
   const files = listAudioFiles();
-  const inDb = new Set(rows.map((r) => r.path));
+  const localRows = rows.filter((r) => !isRemoteMediaUrl(r.path));
+  const inDb = new Set(localRows.map((r) => r.path));
 
-  const missing = rows.filter((r) => !fs.existsSync(path.join(ROOT, 'public', 'audio', r.path)));
+  const missing = localRows.filter((r) => !fs.existsSync(path.join(ROOT, 'public', 'audio', r.path)));
+  console.log(`远程音频：${rows.length - localRows.length} 条（不检查本地文件，也不请求远程地址）。`);
   const extra = files.filter((f) => !inDb.has(f));
 
   console.log(`\n库里条目 ${rows.length} 条 / 目录里音频文件 ${files.length} 个`);
-  if (missing.length === 0) console.log('✓ 所有条目的音频文件都在');
+  if (missing.length === 0) console.log('✓ 所有本地条目的音频文件都在');
   else {
     console.log(`\n✗ 库里有条目、但文件不存在（${missing.length} 条）：`);
     for (const r of missing) console.log(`    [${r.g}] ${r.zh}  →  public/audio/${r.path}`);
@@ -245,7 +248,7 @@ content:add 的全部选项：
   --section voice|song   栏目（默认 voice）
   --group  <分组>        分组 group_name 或标题（必填）
   --zh     <文字>        按钮上显示的文字（必填）
-  --path   <路径>        音频路径，相对 public/audio（必填）
+  --path   <路径/URL>    相对 public/audio 的路径或 HTTP(S) 音频直链（必填）
   --artist <作者>        原唱作者（歌单页按它分组）
   --stack  <合集名>      归入某个合集；合集不存在会自动创建
   --hidden               标记为彩蛋音频（仅在「往日?」开启后显示）
@@ -253,7 +256,7 @@ content:add 的全部选项：
   --time   <时间>        悬停卡片：时间
   --title  <标题>        悬停卡片：标题
   --note   <备注>        悬停卡片：备注
-  --thumb  <图片>        悬停卡片：缩略图，如 /thumbs/x.png
+  --thumb  <图片>        缩略图：如 /thumbs/x.png 或 HTTP(S) 图床直链
 
 内容源：${path.relative(ROOT, DB_PATH)}
 `);

@@ -1,4 +1,5 @@
 import type { Voice, VoiceGroup } from '../data/voices.ts';
+export { audioUrl } from './media.ts';
 
 export function normalVoices(group: VoiceGroup): Voice[] {
   return [...group.voices, ...(group.stacks ?? []).flatMap((stack) => stack.voices)];
@@ -10,10 +11,6 @@ export function findVoice(groups: VoiceGroup[], path: string) {
     if (voice) return { voice, groupName: group.groupName };
   }
   return null;
-}
-
-export function audioUrl(path: string): string {
-  return `/audio/${path.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 export function shareUrl(pageUrl: string, voice: Pick<Voice, 'path' | 'zh'>): string {

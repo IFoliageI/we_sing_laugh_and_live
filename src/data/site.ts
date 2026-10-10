@@ -2,6 +2,7 @@ export const site = {
   // 浏览器标题与 SEO 站点名；顶栏使用短标题 brandTitle
   title: '渺の怪动静播放器',
   brandTitle: '渺の播放器',
+  logoImage: '/icons/index.ico',
   // SEO 描述
   description: '是个会发出怪动静的按钮网站咕',
   keywords: 'VTuber, VoiceButton, 临小渺',

@@ -21,11 +21,26 @@ function fixture(t) {
   return { dir, dbPath, db };
 }
 
-test('content paths match the desktop relative-path contract', () => {
+test('content paths preserve local paths and accept HTTP(S) audio links', () => {
   assert.equal(normalizeAudioPath(' noise\\音频 #1%.mp3 '), 'noise/音频 #1%.mp3');
-  for (const input of ['', '../other.mp3', '/noise/a.mp3', 'C:\\a.mp3', 'https://host/a.mp3', 'noise//a.mp3', 'public/audio/a.mp3']) {
+  assert.equal(normalizeAudioPath(' https://host/a.mp3?Signature=a%2Fb%2B&Expires=123 '), 'https://host/a.mp3?Signature=a%2Fb%2B&Expires=123');
+  for (const input of ['', '../other.mp3', '/noise/a.mp3', 'C:\\a.mp3', 'noise//a.mp3', 'public/audio/a.mp3', '//host/a.mp3', 'https://', 'https://host\\a.mp3', 'https://user:pass@host/a.mp3', 'javascript:alert(1)']) {
     assert.throws(() => normalizeAudioPath(input));
   }
+});
+
+test('remote audio and image metadata round-trip without changing signatures or key case', (t) => {
+  const { db } = fixture(t);
+  const audio = 'https://bucket.example.test/audio/A.mp3?Signature=a%2Fb%2B&Expires=123';
+  const thumb = 'https://images.example.test/cover.webp?imageMogr2/thumbnail/320x&token=a%2B';
+  addItem(db, { group: 'noise', zh: 'Remote', path: audio, thumb });
+  addItem(db, { group: 'noise', zh: 'Different object', path: audio.replace('/A.mp3', '/a.mp3') });
+  assert.throws(() => addItem(db, { group: 'noise', zh: 'Duplicate', path: audio, stack: 'Orphan' }));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM stacks').get().n, 0);
+  const voices = loadSection(db, 'voice').groups[0].voices;
+  assert.equal(voices[0].path, audio);
+  assert.equal(voices[0].info.thumb, thumb);
+  assert.equal(voices.length, 2);
 });
 
 test('dump targets cannot replace the database, schema or files outside data', (t) => {

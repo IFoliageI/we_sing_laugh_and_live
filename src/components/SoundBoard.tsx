@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import { voiceGroups, secretGroup, EMPTY_HINT, PAST_KEY, type VoiceGroup, type Voice, type VoiceStack } from '../data/voices';
 import { createAudioPlayer, type Playing } from '../lib/audio-player';
 import { findVoice, normalVoices, shareUrl } from '../lib/board-data';
+import { imageUrl } from '../lib/media';
 
 interface TipData {
   thumb?: string;
@@ -79,7 +80,7 @@ export function SoundBoard(props: BoardOptions = {}) {
     const rect = el.getBoundingClientRect();
     const above = rect.top > 76; // 靠近页面顶部时改在下方弹出，避免被裁切
     setTip({
-      thumb: info?.thumb,
+      thumb: imageUrl(info?.thumb ?? ''),
       title: info?.title ?? (pos ? voice.zh : undefined),
       time: info?.time,
       note: info?.note,
@@ -493,9 +494,9 @@ export function SoundBoard(props: BoardOptions = {}) {
               classList={{ below: !t().above }}
               style={{ left: t().x + 'px', top: t().y + 'px' }}
             >
-              <Show when={t().thumb}>
-                <img class="sound-tip__thumb" src={t().thumb} alt=""
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <Show when={t().thumb} keyed>
+                {(thumb) => <img class="sound-tip__thumb" src={thumb} alt=""
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
               </Show>
               <div class="sound-tip__body">
                 <Show when={t().pos}>

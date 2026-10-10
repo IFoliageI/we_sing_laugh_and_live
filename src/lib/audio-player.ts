@@ -1,4 +1,4 @@
-import { audioUrl } from './board-data.ts';
+import { audioUrl } from './media.ts';
 import type { Voice } from '../data/voices.ts';
 
 export interface Playing {
@@ -57,7 +57,12 @@ export function createAudioPlayer(
 
   function play(voice: Voice, groupName: string) {
     stop();
-    const audio = makeAudio(audioUrl(voice.path));
+    const url = audioUrl(voice.path);
+    if (!url) {
+      onError('播放失败：音频地址无效');
+      return;
+    }
+    const audio = makeAudio(url);
     audio.loop = looping;
     current = {
       audio,

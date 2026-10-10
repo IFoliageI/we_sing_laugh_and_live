@@ -36,6 +36,9 @@ data/backups/
 .checks/
 .dev.log
 .prev.log
+.env
+.env.*
+!.env.example
 
 # ---------- 编辑器 / 系统 ----------
 .vscode/

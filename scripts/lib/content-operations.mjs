@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { withTransaction, DATA_DIR } from './db.mjs';
+import { isRemoteMediaUrl } from '../../src/lib/media-url.mjs';
 
 export function dumpTarget(fileName = 'content-dump.sql', dataDir = DATA_DIR) {
   if (typeof fileName !== 'string' || !fileName.trim() || path.isAbsolute(fileName) || path.win32.isAbsolute(fileName)) {
@@ -17,10 +18,12 @@ export function dumpTarget(fileName = 'content-dump.sql', dataDir = DATA_DIR) {
   return target;
 }
 
-/** 路径约定与桌面工具一致；文件不存在只提醒，不阻止内容入库。 */
+/** 保留本地路径约定，并允许完整 HTTP(S) 音频直链。 */
 export function normalizeAudioPath(value) {
   if (typeof value !== 'string') throw new Error('音频路径必须是文字。');
-  const audioPath = value.trim().replace(/\\/g, '/');
+  const input = value.trim();
+  if (isRemoteMediaUrl(input)) return input;
+  const audioPath = input.replace(/\\/g, '/');
   const segments = audioPath.split('/');
   if (
     !audioPath ||
@@ -28,7 +31,7 @@ export function normalizeAudioPath(value) {
     segments.some((segment) => !segment || segment === '.' || segment === '..') ||
     segments[0].toLowerCase() === 'public'
   ) {
-    throw new Error('音频路径必须相对 public/audio，不能带盘符、网址或跳出目录。');
+    throw new Error('音频路径必须相对 public/audio，或填写完整 HTTP(S) 直链；不能带盘符或跳出目录。');
   }
   return audioPath;
 }
@@ -55,7 +58,9 @@ export function addItem(db, { group, section = 'voice', zh, path: inputPath, ...
     if (!g) throw new Error('分组不存在或标题不唯一，请用 content:groups 中的分组 id。');
 
     const duplicate = db.prepare('SELECT id, path FROM items WHERE group_id = ?').all(g.id)
-      .find((row) => row.path.replace(/\\/g, '/').toLowerCase() === audioPath.toLowerCase());
+      .find((row) => isRemoteMediaUrl(audioPath)
+        ? row.path === audioPath
+        : row.path.replace(/\\/g, '/').toLowerCase() === audioPath.toLowerCase());
     if (duplicate) throw new Error(`同一分组内已存在相同音频路径（id=${duplicate.id}）：${audioPath}`);
 
     let stackId = null;

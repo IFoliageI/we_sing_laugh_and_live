@@ -186,6 +186,73 @@ try {
       assert.equal(await page.locator('.sound-tip').count(), 0);
       assert.equal(await page.locator('.bottom-sheet').count(), 0);
     });
+    for (const width of [1440, 375]) {
+      await check(`OSS audio, image-host links and configured media bases at ${width}px`, async () => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(new URL('/about/', values.url).href);
+        const directAudio = 'https://oss.example.test/signed/a%20b.mp3?Signature=A%2Fb%2B&Expires=123';
+        const directImage = 'https://images.example.test/cover.svg?x-oss-process=image/resize,w_320&token=A%2B';
+        const requests = [];
+        await page.route('https://oss.example.test/**', (route) => {
+          requests.push(route.request().url());
+          return route.fulfill({ contentType: 'audio/wav', body: audioBody });
+        });
+        await page.route('https://images.example.test/**', (route) => {
+          requests.push(route.request().url());
+          return route.fulfill({
+            contentType: 'image/svg+xml',
+            body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#339966"/></svg>',
+          });
+        });
+        await page.evaluate(async ({ directAudio, directImage }) => {
+          const source = await (await fetch('/src/components/SoundBoard.tsx')).text();
+          const webImport = source.match(/from\s+["']([^"']*solid-js_web[^"']*)["']/);
+          const { render } = await import(webImport[1]);
+          const { SoundBoard } = await import('/src/components/SoundBoard.tsx');
+          const { media } = await import('/src/data/media.ts');
+          const original = { ...media };
+          media.audioBaseUrl = 'https://oss.example.test/audio';
+          media.imageBaseUrl = 'https://images.example.test/public';
+          const mount = document.createElement('div');
+          document.querySelector('main').replaceChildren(mount);
+          const dispose = render(() => SoundBoard({
+            enableSecret: false,
+            groups: [{
+              groupName: 'remote', title: 'Remote',
+              voices: [
+                { path: directAudio, zh: 'Direct', info: { title: 'Direct image', thumb: directImage } },
+                { path: 'songs/曲 #1%.mp3', zh: 'Base', info: { title: 'Base image', thumb: '/thumbs/封面 #1%.svg' } },
+              ],
+            }],
+          }), mount);
+          window.disposeBoardFixture = () => { dispose(); Object.assign(media, original); };
+        }, { directAudio, directImage });
+        const encodedAudio = 'https://oss.example.test/audio/songs/%E6%9B%B2%20%231%25.mp3';
+        const encodedImage = 'https://images.example.test/public/thumbs/%E5%B0%81%E9%9D%A2%20%231%25.svg';
+        for (const [name, audio, image] of [['Direct', directAudio, directImage], ['Base', encodedAudio, encodedImage]]) {
+          await page.getByRole('button', { name, exact: true }).click();
+          await page.waitForFunction(() => document.querySelector('.bottom-sheet__status')?.textContent === '播放中');
+          await page.locator('.search-box input').focus();
+          await page.getByRole('button', { name, exact: true }).focus();
+          await page.waitForFunction(() => {
+            const image = document.querySelector('.sound-tip__thumb');
+            return image?.complete && image.naturalWidth > 0;
+          });
+          assert.equal(await page.locator('.sound-tip__thumb').getAttribute('src'), image);
+          assert.ok(requests.includes(audio));
+          assert.ok(requests.includes(image));
+          await assertFits(page);
+          await page.waitForFunction(() => getComputedStyle(document.querySelector('.sound-tip')).opacity === '1');
+          const bounds = await page.locator('.sound-tip').boundingBox();
+          assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= 900);
+          await page.screenshot({ path: path.join(artifactDir, `media-${name.toLowerCase()}-${width}.png`) });
+          await page.getByRole('button', { name: '停止', exact: true }).click();
+        }
+        await page.evaluate(() => window.disposeBoardFixture());
+        await page.unroute('https://oss.example.test/**');
+        await page.unroute('https://images.example.test/**');
+      });
+    }
   }
   await check('missing files report failure and clear playback', async () => {
     await page.goto(new URL('/', values.url).href);
