@@ -22,6 +22,10 @@ export interface VoiceInfo {
   time?: string;
   // 标题，如「半夜唱歌」
   title?: string;
+  // 音频时长，单位秒（可含小数）；未填写时不显示
+  duration?: number;
+  // 上传者显示名，与原唱作者分开保存
+  uploader?: string;
   // 其他备注（可选）
   note?: string;
   // 缩略图：public 路径（如 /thumbs/xxx.png）或 HTTP(S) 图床直链；不填则不显示

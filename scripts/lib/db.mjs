@@ -74,6 +74,31 @@ export function withTransaction(db, work) {
   }
 }
 
+/** 显式升级旧库；同步和构建继续只读数据库。 */
+export async function upgradeCardMetadata(db, { dbPath = DB_PATH, schemaPath = SCHEMA_PATH } = {}) {
+  const definitions = {
+    info_duration: "REAL CHECK (info_duration IS NULL OR (typeof(info_duration) IN ('integer', 'real') AND info_duration >= 0))",
+    info_uploader: 'TEXT',
+  };
+  const columns = () => new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
+  const existing = columns();
+  if (!existing.has('path')) throw new Error('数据库缺少 items 表，请先恢复完整内容库。');
+  const viewColumns = new Set(db.prepare('PRAGMA table_info(v_items)').all().map((column) => column.name));
+  if (Object.keys(definitions).every((name) => existing.has(name) && viewColumns.has(name))) return { changed: false };
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  const backupFile = await backupDatabase(db, dbPath);
+  withTransaction(db, () => {
+    const current = columns();
+    for (const [name, definition] of Object.entries(definitions)) {
+      if (!current.has(name)) db.exec(`ALTER TABLE items ADD COLUMN ${name} ${definition};`);
+    }
+    // 从项目 schema 重建只读视图；原有表、记录、索引与 id 保留。
+    db.exec('DROP VIEW IF EXISTS v_items;');
+    db.exec(schema);
+  });
+  return { changed: true, backupFile };
+}
+
 /** 只改写有变化的生成物；同目录替换不会暴露半份内容。 */
 export function writeIfChanged(filePath, next) {
   if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === next) return false;
@@ -97,6 +122,10 @@ function toVoice(row) {
   if (row.info_title) info.title = row.info_title;
   if (row.info_note) info.note = row.info_note;
   if (row.info_thumb) info.thumb = row.info_thumb;
+  if (typeof row.info_duration === 'number' && Number.isFinite(row.info_duration) && row.info_duration >= 0) {
+    info.duration = row.info_duration;
+  }
+  if (row.info_uploader?.trim()) info.uploader = row.info_uploader.trim();
   if (Object.keys(info).length > 0) voice.info = info;
   return voice;
 }
@@ -195,6 +224,8 @@ export function listAudioFiles() {
  */
 export function exportDump(db, filePath) {
   const q = (v) => (v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`);
+  const itemColumns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
+  const extraColumns = ['info_duration', 'info_uploader'].filter((name) => itemColumns.has(name));
   const lines = [
     '-- ============================================================',
     '--  内容快照（由 scripts/content-sync.mjs 自动生成，请勿手工编辑）',
@@ -217,7 +248,7 @@ export function exportDump(db, filePath) {
   }
   for (const i of db.prepare('SELECT * FROM items ORDER BY id').all()) {
     lines.push(
-      `INSERT INTO items (id, group_id, stack_id, kind, path, zh, artist, info_time, info_title, info_note, info_thumb, sort_order, is_example, created_at) VALUES (${i.id}, ${i.group_id}, ${i.stack_id ?? 'NULL'}, ${q(i.kind)}, ${q(i.path)}, ${q(i.zh)}, ${q(i.artist)}, ${q(i.info_time)}, ${q(i.info_title)}, ${q(i.info_note)}, ${q(i.info_thumb)}, ${i.sort_order}, ${i.is_example}, ${q(i.created_at)});`
+      `INSERT INTO items (id, group_id, stack_id, kind, path, zh, artist, info_time, info_title, info_note, info_thumb, sort_order, is_example, created_at${extraColumns.map((name) => `, ${name}`).join('')}) VALUES (${i.id}, ${i.group_id}, ${i.stack_id ?? 'NULL'}, ${q(i.kind)}, ${q(i.path)}, ${q(i.zh)}, ${q(i.artist)}, ${q(i.info_time)}, ${q(i.info_title)}, ${q(i.info_note)}, ${q(i.info_thumb)}, ${i.sort_order}, ${i.is_example}, ${q(i.created_at)}${extraColumns.map((name) => `, ${q(i[name])}`).join('')});`
     );
   }
   for (const s of db.prepare('SELECT * FROM settings ORDER BY key').all()) {

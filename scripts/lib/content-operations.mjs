@@ -49,8 +49,29 @@ export function addItem(db, { group, section = 'voice', zh, path: inputPath, ...
   };
   const stackTitle = optionalText(options.stack, 'stack');
   const metadata = ['artist', 'time', 'title', 'note', 'thumb'].map((field) => optionalText(options[field], field));
+  let duration = null;
+  if (options.duration !== undefined) {
+    if (
+      !['string', 'number'].includes(typeof options.duration) ||
+      String(options.duration).trim() === '' ||
+      !Number.isFinite(Number(options.duration)) ||
+      Number(options.duration) < 0 ||
+      !Number.isSafeInteger(Math.floor(Number(options.duration)))
+    ) throw new Error('--duration 必须是非负的音频时长（单位秒）。');
+    duration = Number(options.duration);
+  }
+  const uploader = optionalText(options.uploader, 'uploader');
 
   return withTransaction(db, () => {
+    const columns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
+    const extra = [
+      ['info_duration', duration],
+      ['info_uploader', uploader],
+    ];
+    if (extra.some(([name, value]) => value !== null && !columns.has(name))) {
+      throw new Error('数据库尚未支持音频时长 / 上传者，请先执行 pnpm content:upgrade。');
+    }
+    const supported = extra.filter(([name]) => columns.has(name));
     const matches = db.prepare(
       'SELECT * FROM groups WHERE section = ? AND (group_name = ? OR title = ?)'
     ).all(section, group.trim(), group.trim());
@@ -80,9 +101,9 @@ export function addItem(db, { group, section = 'voice', zh, path: inputPath, ...
     const kind = options.hidden ? 'hidden' : 'normal';
     const result = db.prepare(
       `INSERT INTO items (group_id, stack_id, kind, path, zh, artist,
-                          info_time, info_title, info_note, info_thumb, sort_order, is_example)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(g.id, stackId, kind, audioPath, zh.trim(), ...metadata, order, options.example ? 1 : 0);
+                          info_time, info_title, info_note, info_thumb, sort_order, is_example${supported.map(([name]) => `, ${name}`).join('')})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${supported.map(() => ', ?').join('')})`
+    ).run(g.id, stackId, kind, audioPath, zh.trim(), ...metadata, order, options.example ? 1 : 0, ...supported.map(([, value]) => value));
     return { id: Number(result.lastInsertRowid), group: g, stackId, kind, path: audioPath, zh: zh.trim() };
   });
 }

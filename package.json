@@ -14,6 +14,7 @@
     "test:browser": "node tests/browser.mjs",
 
     "content:sync": "node scripts/content-sync.mjs",
+    "content:upgrade": "node scripts/content-cli.mjs upgrade",
     "content:stats": "node scripts/content-cli.mjs stats",
     "content:groups": "node scripts/content-cli.mjs groups",
     "content:list": "node scripts/content-cli.mjs list",

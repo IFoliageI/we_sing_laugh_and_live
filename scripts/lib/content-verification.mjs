@@ -8,6 +8,7 @@ export function decodeHtml(source) {
 }
 
 function containsJsValue(source, value) {
+  value = String(value);
   const candidates = [
     value,
     JSON.stringify(value).slice(1, -1),
@@ -42,7 +43,10 @@ export function verifyContent(content, html, allJs) {
       const voices = [...group.voices, ...(group.hiddenVoices ?? []), ...(group.stacks ?? []).flatMap((stack) => stack.voices)];
       for (const voice of voices) {
         itemCount++;
-        const fields = [voice.zh, voice.path, voice.artist, voice.info?.time, voice.info?.title, voice.info?.note, voice.info?.thumb].filter(Boolean);
+        const fields = [
+          voice.zh, voice.path, voice.artist, voice.info?.time, voice.info?.title,
+          voice.info?.note, voice.info?.thumb, voice.info?.duration, voice.info?.uploader,
+        ].filter((value) => value !== undefined && value !== null && value !== '');
         for (const value of fields) {
           fieldCount++;
           if (!containsJsValue(allJs, value)) problems.push(`JS[${section}] 缺字段: ${value}（条目 ${voice.zh}）`);

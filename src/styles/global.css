@@ -356,9 +356,9 @@ html.dark .stack-count { color: var(--accent-300); }
   background: var(--surface-2);
 }
 .sound-tip__body { padding: 8px 12px 9px; }
-.sound-tip__line { font-size: .82rem; line-height: 1.6; color: var(--text); }
+.sound-tip__line { font-size: .82rem; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
 .sound-tip__k {
-  color: var(--text-3); font-size: .78rem; margin-right: 6px;
+  color: var(--text-3); font-size: .78rem; margin-right: 6px; white-space: nowrap;
 }
 .sound-tip__k::after { content: '：'; }
 .sound-tip__pos {

@@ -25,6 +25,7 @@ import {
   DB_PATH,
   ROOT,
   backupDatabase,
+  upgradeCardMetadata,
 } from './lib/db.mjs';
 import { addItem, exampleCleanupPlan, removeExamples, dumpTarget } from './lib/content-operations.mjs';
 import { isRemoteMediaUrl } from '../src/lib/media-url.mjs';
@@ -172,6 +173,16 @@ async function cmdAdd() {
   console.log('\n下一步：pnpm content:sync    （或直接 pnpm build，会自动同步）');
 }
 
+async function cmdUpgrade() {
+  const result = await upgradeCardMetadata(db);
+  if (!result.changed) {
+    console.log('· 数据库已支持音频时长 / 上传者，无需升级。');
+    return;
+  }
+  console.log(`✓ 已增加音频时长 / 上传者字段；升级前备份：${result.backupFile}`);
+  console.log('下一步：pnpm content:sync');
+}
+
 async function cmdRmExamples() {
   const plan = exampleCleanupPlan(db);
   const items = plan.items.length;
@@ -243,6 +254,7 @@ function cmdHelp() {
   pnpm content:check                        核对库与 public/audio 目录是否一致
   pnpm content:dump [文件名]                导出为 .sql 文本
   pnpm content:sync                         重新生成 src/data/content.json
+  pnpm content:upgrade                      备份并升级信息小卡可选字段（可重复执行）
 
 content:add 的全部选项：
   --section voice|song   栏目（默认 voice）
@@ -257,6 +269,8 @@ content:add 的全部选项：
   --title  <标题>        悬停卡片：标题
   --note   <备注>        悬停卡片：备注
   --thumb  <图片>        缩略图：如 /thumbs/x.png 或 HTTP(S) 图床直链
+  --duration <秒数>      音频时长，非负数字，可含小数，如 12.5
+  --uploader <显示名>    上传者，与原唱作者分开保存
 
 内容源：${path.relative(ROOT, DB_PATH)}
 `);
@@ -268,6 +282,7 @@ const commands = {
   groups: cmdGroups,
   list: cmdList,
   add: cmdAdd,
+  upgrade: cmdUpgrade,
   'rm-examples': cmdRmExamples,
   check: cmdCheck,
   dump: cmdDump,
@@ -276,7 +291,7 @@ const commands = {
 try {
   if (!Object.hasOwn(commands, cmd)) throw new Error(`未知命令：${cmd}。请运行 pnpm content:help。`);
   if (cmd !== 'help') {
-    const writes = cmd === 'add' || (cmd === 'rm-examples' && argv.yes === true);
+    const writes = cmd === 'add' || cmd === 'upgrade' || (cmd === 'rm-examples' && argv.yes === true);
     db = openDb({ readOnly: !writes });
   }
   await commands[cmd]();

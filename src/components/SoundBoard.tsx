@@ -4,6 +4,7 @@ import { voiceGroups, secretGroup, EMPTY_HINT, PAST_KEY, type VoiceGroup, type V
 import { createAudioPlayer, type Playing } from '../lib/audio-player';
 import { findVoice, normalVoices, shareUrl } from '../lib/board-data';
 import { imageUrl } from '../lib/media';
+import { formatDuration } from '../lib/voice-info';
 
 interface TipData {
   thumb?: string;
@@ -11,6 +12,8 @@ interface TipData {
   time?: string;
   note?: string;
   artist?: string;
+  duration?: string;
+  uploader?: string;
   pos?: string;
   x: number;
   y: number;
@@ -85,6 +88,8 @@ export function SoundBoard(props: BoardOptions = {}) {
       time: info?.time,
       note: info?.note,
       artist: voice.artist,
+      duration: formatDuration(info?.duration),
+      uploader: info?.uploader?.trim(),
       pos,
       x: Math.max(118, Math.min(window.innerWidth - 118, rect.left + rect.width / 2)),
       y: above ? rect.top - 6 : rect.bottom + 6,
@@ -510,6 +515,12 @@ export function SoundBoard(props: BoardOptions = {}) {
                 </Show>
                 <Show when={t().artist}>
                   <div class="sound-tip__line"><span class="sound-tip__k">原唱</span>{t().artist}</div>
+                </Show>
+                <Show when={t().duration}>
+                  <div class="sound-tip__line"><span class="sound-tip__k">音频时长</span>{t().duration}</div>
+                </Show>
+                <Show when={t().uploader}>
+                  <div class="sound-tip__line"><span class="sound-tip__k">上传者</span>{t().uploader}</div>
                 </Show>
                 <Show when={t().note}>
                   <div class="sound-tip__line">{t().note}</div>

@@ -148,6 +148,66 @@ try {
   });
 
   if (!values['skip-fixtures']) {
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 320, height: 568 }]) {
+      await check(`card duration and uploader metadata at ${viewport.width}px`, async () => {
+        await page.setViewportSize(viewport);
+        await page.goto(new URL('/about/', values.url).href);
+        const uploader = '上传者_' + 'VeryLongUploaderName'.repeat(4);
+        await page.evaluate(async (uploader) => {
+          const source = await (await fetch('/src/components/SoundBoard.tsx')).text();
+          const webImport = source.match(/from\s+["']([^"']*solid-js_web[^"']*)["']/);
+          const { render } = await import(webImport[1]);
+          const { SoundBoard } = await import('/src/components/SoundBoard.tsx');
+          const mount = document.createElement('div');
+          document.querySelector('main').replaceChildren(mount);
+          window.disposeBoardFixture = render(() => SoundBoard({
+            enableSecret: false,
+            groups: [{
+              groupName: 'metadata', title: 'Metadata',
+              voices: [
+                { path: 'fixture/info.mp3', zh: 'Metadata clip', info: { duration: 125.75, uploader, thumb: '/thumbs/placeholder.svg' } },
+                { path: 'fixture/old.mp3', zh: 'Legacy clip', info: { title: 'Legacy title' } },
+                { path: 'fixture/plain.mp3', zh: 'Plain clip' },
+              ],
+              stacks: [{
+                title: 'Metadata collection',
+                voices: [
+                  { path: 'fixture/zero.mp3', zh: 'Zero clip', info: { duration: 0, uploader: 'First uploader' } },
+                  { path: 'fixture/hour.mp3', zh: 'Hour clip', info: { duration: 3665, uploader: 'Second uploader' } },
+                ],
+              }],
+            }],
+          }), mount);
+        }, uploader);
+        const tipLine = (label) => page.locator('.sound-tip__line').filter({ has: page.locator('.sound-tip__k', { hasText: label }) });
+        await page.getByRole('button', { name: 'Metadata clip', exact: true }).hover();
+        assert.equal(await tipLine('音频时长').textContent(), '音频时长2:05');
+        assert.equal(await tipLine('上传者').textContent(), `上传者${uploader}`);
+        await page.waitForFunction(() => getComputedStyle(document.querySelector('.sound-tip')).opacity === '1');
+        await assertFits(page);
+        assert.equal(await page.locator('.sound-tip').evaluate((element) => element.scrollWidth <= element.clientWidth), true);
+        const bounds = await page.locator('.sound-tip').boundingBox();
+        assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height);
+        await page.screenshot({ path: path.join(artifactDir, `card-metadata-${viewport.width}.png`) });
+        await page.getByRole('button', { name: 'Legacy clip', exact: true }).focus();
+        assert.equal(await tipLine('音频时长').count(), 0);
+        assert.equal(await tipLine('上传者').count(), 0);
+        assert.ok((await page.locator('.sound-tip').textContent()).includes('Legacy title'));
+        await page.getByRole('button', { name: 'Plain clip', exact: true }).focus();
+        assert.equal(await page.locator('.sound-tip').count(), 0);
+        const stack = page.getByRole('button', { name: 'Metadata collection', exact: false });
+        await stack.focus();
+        assert.equal(await tipLine('音频时长').textContent(), '音频时长0:00');
+        assert.equal(await tipLine('上传者').textContent(), '上传者First uploader');
+        await stack.dblclick();
+        await page.locator('.search-box input').focus();
+        await stack.focus();
+        assert.equal(await tipLine('音频时长').textContent(), '音频时长1:01:05');
+        assert.equal(await tipLine('上传者').textContent(), '上传者Second uploader');
+        await page.evaluate(() => window.disposeBoardFixture());
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
     await check('empty collections, identical names and tooltips render safely', async () => {
       await page.goto(new URL('/about/', values.url).href);
       await page.evaluate(async () => {

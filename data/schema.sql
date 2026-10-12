@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS items (
   info_title  TEXT,                    -- 悬停卡片：标题
   info_note   TEXT,                    -- 悬停卡片：备注
   info_thumb  TEXT,                    -- 悬停卡片：缩略图（/thumbs/xxx.png 或完整 URL）
+  info_duration REAL CHECK (
+    info_duration IS NULL OR (typeof(info_duration) IN ('integer', 'real') AND info_duration >= 0)
+  ),                                  -- 悬停卡片：音频时长（秒，可含小数）
+  info_uploader TEXT,                 -- 悬停卡片：上传者显示名
   sort_order  INTEGER NOT NULL DEFAULT 0,
   is_example  INTEGER NOT NULL DEFAULT 0 CHECK (is_example IN (0, 1)),
                           -- 1 = 占位示例条目，可用 pnpm content:rm-examples 一键清除
@@ -95,6 +99,8 @@ SELECT
   i.info_title,
   i.info_note,
   i.info_thumb,
+  i.info_duration,
+  i.info_uploader,
   i.sort_order,
   i.is_example
 FROM items i

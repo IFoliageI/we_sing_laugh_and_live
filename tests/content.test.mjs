@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { openDb, backupDatabase, exportDump, loadSection, SCHEMA_PATH } from '../scripts/lib/db.mjs';
+import { openDb, backupDatabase, exportDump, loadSection, upgradeCardMetadata, SCHEMA_PATH } from '../scripts/lib/db.mjs';
 import { addItem, removeExamples, exampleCleanupPlan, normalizeAudioPath, dumpTarget } from '../scripts/lib/content-operations.mjs';
 import { restoreDatabase } from '../scripts/content-migrate.mjs';
 import { verifyContent, decodeHtml } from '../scripts/lib/content-verification.mjs';
@@ -20,6 +20,111 @@ function fixture(t) {
   });
   return { dir, dbPath, db };
 }
+
+function legacyFixture(t) {
+  const result = fixture(t);
+  result.db.exec(`
+    DROP VIEW v_items;
+    ALTER TABLE items DROP COLUMN info_duration;
+    ALTER TABLE items DROP COLUMN info_uploader;
+    CREATE VIEW v_items AS SELECT id, path FROM items;
+  `);
+  return result;
+}
+
+test('card metadata survives JSON export and SQL snapshot restoration', (t) => {
+  const { db, dir } = fixture(t);
+  addItem(db, { group: 'noise', zh: 'Single', path: 'noise/a.mp3', duration: '12.5', uploader: " Uploader's 中文 " });
+  addItem(db, { group: 'noise', zh: 'Member', path: 'noise/b.mp3', stack: 'Stack', duration: 0, uploader: 'Member uploader' });
+  addItem(db, { group: 'noise', zh: 'Hidden', path: 'noise/c.mp3', hidden: true, duration: 3665, uploader: 'Hidden uploader' });
+  const group = loadSection(db, 'voice').groups[0];
+  assert.deepEqual(group.voices[0].info, { duration: 12.5, uploader: "Uploader's 中文" });
+  assert.equal(group.stacks[0].voices[0].info.duration, 0);
+  assert.equal(group.hiddenVoices[0].info.uploader, 'Hidden uploader');
+  const dumpPath = path.join(dir, 'metadata.sql');
+  exportDump(db, dumpPath);
+  const dbPath = path.join(dir, 'metadata.db');
+  restoreDatabase({ dbPath, dumpPath });
+  const restored = openDb({ readOnly: true, dbPath });
+  try {
+    assert.deepEqual(loadSection(restored, 'voice'), loadSection(db, 'voice'));
+    assert.equal(restored.prepare('SELECT info_duration, info_uploader FROM v_items WHERE id = 1').get().info_duration, 12.5);
+  } finally {
+    restored.close();
+  }
+});
+
+test('invalid duration options do not create content or collections', (t) => {
+  const { db } = fixture(t);
+  for (const duration of [true, null, '', '  ', 'bad', '-1', '-Infinity', 'Infinity', NaN, Number.MAX_VALUE]) {
+    assert.throws(() => addItem(db, { group: 'noise', zh: 'Invalid', path: 'noise/a.mp3', stack: 'Orphan', duration }));
+  }
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM items').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM stacks').get().n, 0);
+});
+
+test('old databases remain readable and writable without new metadata', (t) => {
+  const { db, dir } = legacyFixture(t);
+  addItem(db, { group: 'noise', zh: 'Legacy', path: 'noise/a.mp3', title: 'Old title' });
+  const original = loadSection(db, 'voice');
+  assert.deepEqual(original.groups[0].voices[0].info, { title: 'Old title' });
+  assert.throws(() => addItem(db, { group: 'noise', zh: 'New', path: 'noise/b.mp3', duration: 0, stack: 'Orphan' }), /content:upgrade/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM stacks').get().n, 0);
+  const dumpPath = path.join(dir, 'legacy.sql');
+  exportDump(db, dumpPath);
+  const dbPath = path.join(dir, 'restored-legacy.db');
+  restoreDatabase({ dbPath, dumpPath });
+  const restored = openDb({ readOnly: true, dbPath });
+  try {
+    assert.deepEqual(loadSection(restored, 'voice'), original);
+  } finally {
+    restored.close();
+  }
+});
+
+test('metadata upgrade backs up old data and is idempotent', async (t) => {
+  const { db, dbPath } = legacyFixture(t);
+  addItem(db, { group: 'noise', zh: 'Legacy', path: 'noise/a.mp3', note: 'Keep' });
+  const original = loadSection(db, 'voice');
+  const result = await upgradeCardMetadata(db, { dbPath });
+  assert.equal(result.changed, true);
+  assert.deepEqual(loadSection(db, 'voice'), original);
+  assert.equal(db.prepare('SELECT info_duration, info_uploader FROM v_items').get().info_duration, null);
+  const snapshot = openDb({ readOnly: true, dbPath: result.backupFile });
+  try {
+    assert.equal(snapshot.prepare('PRAGMA table_info(items)').all().some((column) => column.name === 'info_duration'), false);
+    assert.deepEqual(loadSection(snapshot, 'voice'), original);
+  } finally {
+    snapshot.close();
+  }
+  assert.deepEqual(await upgradeCardMetadata(db, { dbPath }), { changed: false });
+  assert.equal(fs.readdirSync(path.dirname(result.backupFile)).length, 1);
+  assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+test('metadata upgrade supports partial schemas and rolls back on failure', async (t) => {
+  const { db, dbPath, dir } = legacyFixture(t);
+  db.exec('ALTER TABLE items ADD COLUMN info_duration REAL;');
+  addItem(db, { group: 'noise', zh: 'Partial', path: 'noise/a.mp3', duration: 12.5 });
+  const invalidSchema = path.join(dir, 'invalid-schema.sql');
+  fs.writeFileSync(invalidSchema, 'INVALID SQL;');
+  await assert.rejects(upgradeCardMetadata(db, { dbPath, schemaPath: invalidSchema }));
+  assert.equal(db.prepare('PRAGMA table_info(items)').all().some((column) => column.name === 'info_uploader'), false);
+  assert.equal(db.prepare('SELECT * FROM v_items').get().path, 'noise/a.mp3');
+  assert.equal(db.isTransaction, false);
+  await upgradeCardMetadata(db, { dbPath });
+  assert.equal(loadSection(db, 'voice').groups[0].voices[0].info.duration, 12.5);
+});
+
+test('metadata upgrade also refreshes an old view when both columns already exist', async (t) => {
+  const { db, dbPath } = legacyFixture(t);
+  db.exec('ALTER TABLE items ADD COLUMN info_duration REAL; ALTER TABLE items ADD COLUMN info_uploader TEXT;');
+  addItem(db, { group: 'noise', zh: 'Manual upgrade', path: 'noise/a.mp3', duration: 5, uploader: 'Uploader' });
+  const result = await upgradeCardMetadata(db, { dbPath });
+  assert.equal(result.changed, true);
+  assert.equal(db.prepare('SELECT info_uploader FROM v_items').get().info_uploader, 'Uploader');
+});
 
 test('content paths preserve local paths and accept HTTP(S) audio links', () => {
   assert.equal(normalizeAudioPath(' noise\\音频 #1%.mp3 '), 'noise/音频 #1%.mp3');
@@ -190,4 +295,21 @@ test('build verification handles HTML entities and escaped JS text separately', 
   const html = { voice: 'A &amp;amp; B Quote &quot; &amp;', song: '' };
   assert.deepEqual(verifyContent(content, html, JSON.stringify(content)).problems, []);
   assert.equal(decodeHtml('&#39; &#x4e2d; &amp;amp;'), "' 中 &amp;");
+});
+
+test('build verification checks uploader and numeric duration, including zero', () => {
+  const content = {
+    voice: {
+      hint: '',
+      groups: [{
+        groupName: 'metadata', title: 'Metadata',
+        voices: [{ zh: 'Clip', path: 'clip.mp3', info: { duration: 323.75, uploader: 'Uploader label' } }],
+      }],
+    },
+  };
+  assert.deepEqual(verifyContent(content, { voice: 'Metadata Clip' }, JSON.stringify(content)).problems, []);
+  const missing = verifyContent(content, { voice: 'Metadata Clip' }, 'Clip clip.mp3');
+  assert.equal(missing.problems.length, 2);
+  content.voice.groups[0].voices[0].info.duration = 0;
+  assert.equal(verifyContent(content, { voice: 'Metadata Clip' }, JSON.stringify(content)).fieldCount, 4);
 });
