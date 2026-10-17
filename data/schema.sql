@@ -69,6 +69,22 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE INDEX IF NOT EXISTS idx_items_group ON items(group_id);
 CREATE INDEX IF NOT EXISTS idx_items_stack ON items(stack_id);
 
+-- Private Studio catalog: items.path remains a browser playback path.
+-- asset_json stores the tagged physical location, authority, SHA-256 and byte count.
+CREATE TABLE IF NOT EXISTS item_audio (
+  item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  tag TEXT NOT NULL CHECK (tag = 'wesing-audio/v1'),
+  asset_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audio_cleanup (
+  asset_json TEXT PRIMARY KEY,
+  tag TEXT NOT NULL CHECK (tag = 'wesing-audio/v1')
+);
+CREATE TABLE IF NOT EXISTS audio_retired (
+  asset_json TEXT PRIMARY KEY,
+  tag TEXT NOT NULL CHECK (tag = 'wesing-audio/v1')
+);
+
 -- ------------------------------------------------------------
 -- 全局文案 / 配置
 -- ------------------------------------------------------------

@@ -254,6 +254,15 @@ export function exportDump(db, filePath) {
   for (const s of db.prepare('SELECT * FROM settings ORDER BY key').all()) {
     lines.push(`INSERT INTO settings (key, value) VALUES (${q(s.key)}, ${q(s.value)});`);
   }
+  // Studio's private catalog must survive SQL backup/restore without entering public JSON.
+  for (const table of ['item_audio', 'audio_cleanup', 'audio_retired']) {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)) continue;
+    const columns = table === 'item_audio' ? ['item_id', 'tag', 'asset_json'] : ['asset_json', 'tag'];
+    lines.push(`DELETE FROM ${table};`);
+    for (const row of db.prepare(`SELECT ${columns.join(', ')} FROM ${table} ORDER BY ${columns[0]}`).all()) {
+      lines.push(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((column) => q(row[column])).join(', ')});`);
+    }
+  }
   // 保留已删除内容的最高 id，避免恢复后复用旧 id。
   lines.push("DELETE FROM sqlite_sequence WHERE name IN ('groups', 'stacks', 'items');");
   for (const sequence of db.prepare(
