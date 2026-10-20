@@ -129,10 +129,13 @@ function cmdGroups() {
 function cmdList() {
   const sec = argv.section && SECTIONS[argv.section] ? argv.section : null;
   const where = sec ? 'WHERE g.section = ?' : '';
+  // 旧库可能还没有 special_effect 列：有就显示，没有就留空，避免直接报错
+  const hasEffect = db.prepare('PRAGMA table_info(items)').all().some((column) => column.name === 'special_effect');
+  const effectColumn = hasEffect ? 'i.special_effect' : 'NULL AS special_effect';
   const rows = db
     .prepare(
       `SELECT i.id, g.section, g.title AS group_title, i.kind, i.stack_id, i.path, i.zh, i.artist,
-              i.info_time, i.info_title, i.is_example,
+              i.info_time, i.info_title, i.is_example, ${effectColumn},
               (SELECT title FROM stacks s WHERE s.id = i.stack_id) AS stack_title
        FROM items i JOIN groups g ON g.id = i.group_id
        ${where}
@@ -141,7 +144,9 @@ function cmdList() {
     .all(...(sec ? [sec] : []));
 
   console.log(`\n共 ${rows.length} 条${sec ? `（${sectionLabel(sec)}）` : ''}\n`);
-  console.log('  ' + pad('id', 6) + pad('分组', 26) + pad('类型', 18) + pad('按钮文字', 32) + pad('音频路径', 36) + '示例');
+  console.log(
+    '  ' + pad('id', 6) + pad('分组', 26) + pad('类型', 18) + pad('按钮文字', 32) + pad('音频路径', 36) + pad('特效', 6) + '示例'
+  );
   for (const r of rows) {
     const type = r.kind === 'hidden' ? '彩蛋' : r.stack_id ? `合集·${r.stack_title ?? ''}` : '独立';
     console.log(
@@ -151,6 +156,7 @@ function cmdList() {
         pad(clip(type, 16), 18) +
         pad(clip(r.zh, 30), 32) +
         pad(clip(r.path, 34), 36) +
+        pad(r.special_effect ? '✦' : '', 6) +
         (r.is_example ? '✔' : '')
     );
   }
@@ -165,6 +171,7 @@ async function cmdAdd() {
   console.log(`    类型：${kind === 'hidden' ? '彩蛋音频' : stackId ? `合集成员（${argv.stack}）` : '独立按钮'}`);
   console.log(`    文字：${zh}`);
   console.log(`    音频：${audioPath}`);
+  if (argv['special-effect'] === true) console.log('    特效图标：已开启（按钮文字左侧显示 SpecialEffectSize）');
 
   const file = path.join(ROOT, 'public', 'audio', audioPath);
   if (!isRemoteMediaUrl(audioPath) && !fs.existsSync(file)) {
@@ -272,6 +279,7 @@ content:add 的全部选项：
   --duration <秒数>      音频时长，非负数字，可含小数，如 12.5
   --uploader <显示名>    上传者，与原唱作者分开保存
   --songcut-text <文字>  歌切指路纯文本（可选，仅 song，不支持点击跳转）
+  --special-effect       在按钮文字左侧显示「SpecialEffectSize」图标（不带值）
 
 内容源：${path.relative(ROOT, DB_PATH)}
 `);

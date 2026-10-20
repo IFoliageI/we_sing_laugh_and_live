@@ -310,6 +310,18 @@ html.dark .sound-btn:hover { background: var(--surface-2); }
 }
 .sound-btn.playing:hover { background: linear-gradient(135deg, var(--play-500), var(--play-600)); }
 
+/* 「SpecialEffectSize」标记图标：位于按钮文字左侧，字体由 .sficon 提供 */
+.sound-btn__effect {
+  display: inline-block;
+  margin-right: 5px;
+  font-size: .86rem;              /* 比按钮文字略小，避免抢视线 */
+  vertical-align: -.08em;         /* 与文字做视觉基线对齐 */
+  color: var(--accent-600);
+}
+html.dark .sound-btn__effect { color: var(--accent-300); }
+/* 播放态是深色底，图标改用按钮文字色保证对比度 */
+.sound-btn.playing .sound-btn__effect { color: currentColor; }
+
 .sound-btn .progress {
   position: absolute; left: 0; bottom: 0; height: 3px; width: var(--progress, 0%);
   background: linear-gradient(90deg, var(--accent-300), var(--accent-500));

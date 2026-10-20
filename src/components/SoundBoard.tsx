@@ -21,6 +21,10 @@ interface TipData {
   above: boolean;
 }
 
+// Segoe Fluent Icons 的「SpecialEffectSize」字形（U+F4A5）。
+// 码位已用 public/fonts/SegoeFluentIcons.ttf 的 cmap 校验存在（glyphId 1029）。
+const SPECIAL_EFFECT_ICON = String.fromCharCode(0xf4a5);
+
 // 这个音效板组件被「首页」和「渺の歌单」两页共用。
 // 不传任何 props 时，行为与首页完全一致（用 voices.ts 的音效数据）；歌单页传入歌曲数据与相应文案。
 export interface BoardOptions {
@@ -395,6 +399,9 @@ export function SoundBoard(props: BoardOptions = {}) {
                               >
                                 <Show when={isCurrentVoice(voice, group.groupName)}>
                                   <span class="pulse-dot" />
+                                </Show>
+                                <Show when={voice.specialEffect}>
+                                  <span class="sficon sound-btn__effect" aria-hidden="true">{SPECIAL_EFFECT_ICON}</span>
                                 </Show>
                                 <span>{voice.zh}</span>
                                 <Show when={isCurrentVoice(voice, group.groupName)}>

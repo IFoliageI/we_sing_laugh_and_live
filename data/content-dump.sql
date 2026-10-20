@@ -16,8 +16,11 @@ INSERT INTO groups (id, section, group_name, title, sort_order, is_secret) VALUE
 INSERT INTO groups (id, section, group_name, title, sort_order, is_secret) VALUES (10, 'song', 'song_pop', '流行', 3, 0);
 INSERT INTO settings (key, value) VALUES ('song_empty_hint', '还没有歌曲哦，等主人有空放进 public/audio/songs 就能听啦');
 INSERT INTO settings (key, value) VALUES ('voice_empty_hint', '还没有音效哦，等主人有空放进 public/audio 就能用啦');
+DELETE FROM item_audio;
+DELETE FROM audio_cleanup;
+DELETE FROM audio_retired;
 DELETE FROM sqlite_sequence WHERE name IN ('groups', 'stacks', 'items');
 INSERT INTO sqlite_sequence (name, seq) VALUES ('groups', 23);
-INSERT INTO sqlite_sequence (name, seq) VALUES ('items', 121);
+INSERT INTO sqlite_sequence (name, seq) VALUES ('items', 122);
 INSERT INTO sqlite_sequence (name, seq) VALUES ('stacks', 15);
 COMMIT;

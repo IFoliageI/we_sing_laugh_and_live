@@ -80,6 +80,8 @@ export async function upgradeCardMetadata(db, { dbPath = DB_PATH, schemaPath = S
     info_duration: "REAL CHECK (info_duration IS NULL OR (typeof(info_duration) IN ('integer', 'real') AND info_duration >= 0))",
     info_uploader: 'TEXT',
     info_songcut_text: 'TEXT',
+    // 按钮显示属性：1 = 文字左侧显示 SpecialEffectSize 图标（Segoe Fluent Icons U+F4A5）
+    special_effect: 'INTEGER NOT NULL DEFAULT 0 CHECK (special_effect IN (0, 1))',
   };
   const columns = () => new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
   const existing = columns();
@@ -118,6 +120,8 @@ export function writeIfChanged(filePath, next) {
 function toVoice(row) {
   const voice = { path: row.path, zh: row.zh };
   if (row.artist) voice.artist = row.artist;
+  // 旧库可能没有 special_effect 列，undefined 视为未设置
+  if (row.special_effect) voice.specialEffect = true;
   const info = {};
   if (row.info_time) info.time = row.info_time;
   if (row.info_title) info.title = row.info_title;
@@ -227,7 +231,7 @@ export function listAudioFiles() {
 export function exportDump(db, filePath) {
   const q = (v) => (v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`);
   const itemColumns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
-  const extraColumns = ['info_duration', 'info_uploader', 'info_songcut_text'].filter((name) => itemColumns.has(name));
+  const extraColumns = ['info_duration', 'info_uploader', 'info_songcut_text', 'special_effect'].filter((name) => itemColumns.has(name));
   const lines = [
     '-- ============================================================',
     '--  内容快照（由 scripts/content-sync.mjs 自动生成，请勿手工编辑）',

@@ -28,6 +28,7 @@ function legacyFixture(t) {
     ALTER TABLE items DROP COLUMN info_duration;
     ALTER TABLE items DROP COLUMN info_uploader;
     ALTER TABLE items DROP COLUMN info_songcut_text;
+    ALTER TABLE items DROP COLUMN special_effect;
     CREATE VIEW v_items AS SELECT id, path FROM items;
   `);
   return result;
@@ -53,6 +54,43 @@ test('card metadata survives JSON export and SQL snapshot restoration', (t) => {
   } finally {
     restored.close();
   }
+});
+
+test('special-effect flag round-trips in JSON export and stays off by default', (t) => {
+  const { db, dir } = fixture(t);
+  addItem(db, { group: 'noise', zh: 'With effect', path: 'noise/a.mp3', specialEffect: true });
+  addItem(db, { group: 'noise', zh: 'Plain', path: 'noise/b.mp3' });
+  addItem(db, { group: 'noise', zh: 'Hidden effect', path: 'noise/c.mp3', hidden: true, 'special-effect': true });
+
+  const group = loadSection(db, 'voice').groups[0];
+  assert.equal(group.voices[0].specialEffect, true);
+  assert.equal('specialEffect' in group.voices[1], false, '未设置的条目不输出该字段');
+  assert.equal(group.hiddenVoices[0].specialEffect, true);
+
+  // SQL 快照往返后保持一致，且视图能查到该列
+  const dumpPath = path.join(dir, 'special-effect.sql');
+  exportDump(db, dumpPath);
+  const dbPath = path.join(dir, 'special-effect.db');
+  restoreDatabase({ dbPath, dumpPath });
+  const restored = openDb({ readOnly: true, dbPath });
+  try {
+    assert.deepEqual(loadSection(restored, 'voice'), loadSection(db, 'voice'));
+    assert.equal(restored.prepare('SELECT special_effect FROM v_items WHERE id = 1').get().special_effect, 1);
+  } finally {
+    restored.close();
+  }
+});
+
+test('special-effect flag rejects a value and needs the upgraded column', (t) => {
+  const { db } = fixture(t);
+  assert.throws(() => addItem(db, { group: 'noise', zh: 'Bad', path: 'noise/x.mp3', 'special-effect': 'yes' }));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM items').get().n, 0);
+
+  const { db: legacy } = legacyFixture(t);
+  assert.throws(
+    () => addItem(legacy, { group: 'noise', zh: 'Legacy', path: 'noise/y.mp3', specialEffect: true }),
+    /content:upgrade/
+  );
 });
 
 test('invalid duration options do not create content or collections', (t) => {

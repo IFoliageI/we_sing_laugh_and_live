@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS items (
   ),                                  -- 悬停卡片：音频时长（秒，可含小数）
   info_uploader TEXT,                 -- 悬停卡片：上传者显示名
   info_songcut_text TEXT,              -- 歌单小卡：歌切指路纯文本
+  special_effect INTEGER NOT NULL DEFAULT 0 CHECK (special_effect IN (0, 1)),
+                          -- 1 = 该按钮文字左侧显示「SpecialEffectSize」图标（Segoe Fluent Icons U+F4A5）
   sort_order  INTEGER NOT NULL DEFAULT 0,
   is_example  INTEGER NOT NULL DEFAULT 0 CHECK (is_example IN (0, 1)),
                           -- 1 = 占位示例条目，可用 pnpm content:rm-examples 一键清除
@@ -119,6 +121,7 @@ SELECT
   i.info_duration,
   i.info_uploader,
   i.info_songcut_text,
+  i.special_effect,
   i.sort_order,
   i.is_example
 FROM items i

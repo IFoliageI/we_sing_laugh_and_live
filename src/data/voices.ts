@@ -41,6 +41,9 @@ export interface Voice {
   zh: string;
   // 原唱作者（「渺の歌单」可按它分组；音效类可留空）
   artist?: string;
+  // true = 在按钮文字左侧显示「SpecialEffectSize」图标（Segoe Fluent Icons U+F4A5）
+  // 数据源：SQLite items.special_effect；不设置则不输出此字段
+  specialEffect?: boolean;
   // 悬停卡片信息
   info?: VoiceInfo;
 }

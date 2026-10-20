@@ -9,6 +9,8 @@ dist/
 .pnpm-store/
 
 # ---------- 归档与打包（体积大，不入库）----------
+# 历史归档统一放在 _archive/（旧的 Nuxt 归档、离线发布包等）
+_archive/
 # 旧的 Nuxt 原项目归档
 Temp/
 Temp.7z

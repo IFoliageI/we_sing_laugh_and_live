@@ -65,6 +65,12 @@ export function addItem(db, { group, section = 'voice', zh, path: inputPath, ...
   if (songCutText) {
     if (section !== 'song') throw new Error('歌切指路仅适用于歌单，请使用 --section song。');
   }
+  // 显示属性：为 true 时在按钮文字左侧显示「SpecialEffectSize」图标；不接受带值
+  const specialEffectValue = options.specialEffect ?? options['special-effect'];
+  if (specialEffectValue !== undefined && specialEffectValue !== true) {
+    throw new Error('--special-effect 是不带值的开关参数，直接写 --special-effect 即可。');
+  }
+  const specialEffect = specialEffectValue === true;
 
   return withTransaction(db, () => {
     const columns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
@@ -76,7 +82,15 @@ export function addItem(db, { group, section = 'voice', zh, path: inputPath, ...
     if (extra.some(([name, value]) => value !== null && !columns.has(name))) {
       throw new Error('数据库缺少对应的信息小卡字段，请先执行 pnpm content:upgrade。');
     }
-    const supported = extra.filter(([name]) => columns.has(name));
+    // 只有明确开启时才写入，旧库不会因为默认值而报缺列
+    const displayFlags = [];
+    if (specialEffect) {
+      if (!columns.has('special_effect')) {
+        throw new Error('数据库缺少 special_effect 字段，请先执行 pnpm content:upgrade。');
+      }
+      displayFlags.push(['special_effect', 1]);
+    }
+    const supported = [...extra.filter(([name]) => columns.has(name)), ...displayFlags];
     const matches = db.prepare(
       'SELECT * FROM groups WHERE section = ? AND (group_name = ? OR title = ?)'
     ).all(section, group.trim(), group.trim());
