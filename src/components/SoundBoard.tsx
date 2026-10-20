@@ -14,6 +14,7 @@ interface TipData {
   artist?: string;
   duration?: string;
   uploader?: string;
+  songCutText?: string;
   pos?: string;
   x: number;
   y: number;
@@ -29,6 +30,8 @@ export interface BoardOptions {
   secret?: VoiceGroup;
   // 是否启用「往日」彩蛋（默认 true，歌单页传 false）
   enableSecret?: boolean;
+  // 歌单专用：在原有小卡中显示歌切指路文本
+  showSongCut?: boolean;
   // 以下均为可覆盖的界面文案
   searchPlaceholder?: string;
   noResultWord?: string;
@@ -90,6 +93,7 @@ export function SoundBoard(props: BoardOptions = {}) {
       artist: voice.artist,
       duration: formatDuration(info?.duration),
       uploader: info?.uploader?.trim(),
+      songCutText: props.showSongCut ? info?.songCutText?.trim() : undefined,
       pos,
       x: Math.max(118, Math.min(window.innerWidth - 118, rect.left + rect.width / 2)),
       y: above ? rect.top - 6 : rect.bottom + 6,
@@ -521,6 +525,9 @@ export function SoundBoard(props: BoardOptions = {}) {
                 </Show>
                 <Show when={t().uploader}>
                   <div class="sound-tip__line"><span class="sound-tip__k">上传者</span>{t().uploader}</div>
+                </Show>
+                <Show when={t().songCutText}>
+                  <div class="sound-tip__line"><span class="sound-tip__k">歌切指路</span>{t().songCutText}</div>
                 </Show>
                 <Show when={t().note}>
                   <div class="sound-tip__line">{t().note}</div>

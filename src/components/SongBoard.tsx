@@ -37,6 +37,7 @@ export function SongBoard() {
       <SoundBoard
         groups={groups()}
         enableSecret={false}
+        showSongCut={true}
         searchPlaceholder="搜索歌曲…"
         noResultWord="歌曲"
         emptyGroupText="(本组暂无歌曲,待一只巨型咕咕咕手动填入咕)"

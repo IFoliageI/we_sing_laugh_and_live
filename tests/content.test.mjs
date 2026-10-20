@@ -27,6 +27,7 @@ function legacyFixture(t) {
     DROP VIEW v_items;
     ALTER TABLE items DROP COLUMN info_duration;
     ALTER TABLE items DROP COLUMN info_uploader;
+    ALTER TABLE items DROP COLUMN info_songcut_text;
     CREATE VIEW v_items AS SELECT id, path FROM items;
   `);
   return result;
@@ -117,13 +118,82 @@ test('metadata upgrade supports partial schemas and rolls back on failure', asyn
   assert.equal(loadSection(db, 'voice').groups[0].voices[0].info.duration, 12.5);
 });
 
-test('metadata upgrade also refreshes an old view when both columns already exist', async (t) => {
+test('metadata upgrade also refreshes an old view when all optional columns already exist', async (t) => {
   const { db, dbPath } = legacyFixture(t);
   db.exec('ALTER TABLE items ADD COLUMN info_duration REAL; ALTER TABLE items ADD COLUMN info_uploader TEXT;');
+  db.exec('ALTER TABLE items ADD COLUMN info_songcut_text TEXT;');
   addItem(db, { group: 'noise', zh: 'Manual upgrade', path: 'noise/a.mp3', duration: 5, uploader: 'Uploader' });
   const result = await upgradeCardMetadata(db, { dbPath });
   assert.equal(result.changed, true);
   assert.equal(db.prepare('SELECT info_uploader FROM v_items').get().info_uploader, 'Uploader');
+});
+
+test('song-cut text round-trips in song JSON and SQL backups without a URL', (t) => {
+  const { db, dir } = fixture(t);
+  db.exec("INSERT INTO groups (section, group_name, title) VALUES ('song', 'covers', 'Covers');");
+  const text = "看这段'完整歌切'：合集第二集\n从副歌开始";
+  addItem(db, {
+    section: 'song', group: 'covers', zh: 'Song', path: 'songs/a.mp3', artist: 'Artist',
+    'songcut-text': ` ${text} `,
+  });
+  const info = loadSection(db, 'song').groups[0].voices[0].info;
+  assert.deepEqual(info, { songCutText: text });
+  const dumpPath = path.join(dir, 'song-cut.sql');
+  exportDump(db, dumpPath);
+  const dbPath = path.join(dir, 'restored-song-cut.db');
+  restoreDatabase({ dbPath, dumpPath });
+  const restored = openDb({ readOnly: true, dbPath });
+  try {
+    assert.deepEqual(loadSection(restored, 'song'), loadSection(db, 'song'));
+    assert.equal(restored.prepare('SELECT info_songcut_text FROM v_items').get().info_songcut_text, text);
+  } finally {
+    restored.close();
+  }
+});
+
+test('invalid song-cut text options do not create rows or collections', (t) => {
+  const { db } = fixture(t);
+  db.exec("INSERT INTO groups (section, group_name, title) VALUES ('song', 'covers', 'Covers');");
+  for (const options of [
+    { 'songcut-text': true },
+    { 'songcut-text': 123 },
+    { 'songcut-text': null },
+    { section: 'voice', group: 'noise', 'songcut-text': 'Label' },
+  ]) {
+    assert.throws(() => addItem(db, { section: 'song', group: 'covers', zh: 'Invalid', path: 'songs/a.mp3', stack: 'Orphan', ...options }));
+  }
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM items').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM stacks').get().n, 0);
+});
+
+test('blank song-cut text is omitted from exported metadata', (t) => {
+  const { db } = fixture(t);
+  db.exec("INSERT INTO groups (section, group_name, title) VALUES ('song', 'covers', 'Covers');");
+  addItem(db, { section: 'song', group: 'covers', zh: 'Blank', path: 'songs/a.mp3', 'songcut-text': ' \n ' });
+  assert.equal(loadSection(db, 'song').groups[0].voices[0].info, undefined);
+  assert.equal(db.prepare('SELECT info_songcut_text FROM items').get().info_songcut_text, null);
+});
+
+test('upgrade from duration/uploader schema preserves those values and adds song-cut text', async (t) => {
+  const { db, dbPath } = fixture(t);
+  addItem(db, { group: 'noise', zh: 'Current', path: 'noise/a.mp3', duration: 12.5, uploader: 'Uploader' });
+  db.exec('DROP VIEW v_items; ALTER TABLE items DROP COLUMN info_songcut_text;');
+  const original = db.prepare('SELECT * FROM items').all();
+  db.exec("INSERT INTO groups (section, group_name, title) VALUES ('song', 'covers', 'Covers');");
+  assert.throws(() => addItem(db, {
+    section: 'song', group: 'covers', zh: 'Not upgraded', path: 'songs/a.mp3', stack: 'Orphan', 'songcut-text': '合集第二集',
+  }), /content:upgrade/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM stacks').get().n, 0);
+  const result = await upgradeCardMetadata(db, { dbPath });
+  assert.equal(result.changed, true);
+  const current = db.prepare('SELECT * FROM items').all().map((row) => {
+    assert.equal(row.info_songcut_text, null);
+    delete row.info_songcut_text;
+    return row;
+  });
+  assert.deepEqual(current, original);
+  assert.equal(db.prepare('SELECT info_songcut_text FROM v_items').get().info_songcut_text, null);
+  assert.deepEqual(await upgradeCardMetadata(db, { dbPath }), { changed: false });
 });
 
 test('content paths preserve local paths and accept HTTP(S) audio links', () => {
@@ -312,4 +382,18 @@ test('build verification checks uploader and numeric duration, including zero', 
   assert.equal(missing.problems.length, 2);
   content.voice.groups[0].voices[0].info.duration = 0;
   assert.equal(verifyContent(content, { voice: 'Metadata Clip' }, JSON.stringify(content)).fieldCount, 4);
+});
+
+test('build verification checks song-cut information text', () => {
+  const content = {
+    song: {
+      hint: '',
+      groups: [{ groupName: 'cuts', title: 'Cuts', voices: [{
+        zh: 'Song', path: 'songs/a.mp3',
+        info: { songCutText: '完整歌切见合集第二集' },
+      }] }],
+    },
+  };
+  assert.deepEqual(verifyContent(content, { song: 'Cuts Song' }, JSON.stringify(content)).problems, []);
+  assert.equal(verifyContent(content, { song: 'Cuts Song' }, 'Song songs/a.mp3').problems.length, 1);
 });

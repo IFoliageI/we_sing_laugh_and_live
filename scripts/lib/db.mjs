@@ -79,6 +79,7 @@ export async function upgradeCardMetadata(db, { dbPath = DB_PATH, schemaPath = S
   const definitions = {
     info_duration: "REAL CHECK (info_duration IS NULL OR (typeof(info_duration) IN ('integer', 'real') AND info_duration >= 0))",
     info_uploader: 'TEXT',
+    info_songcut_text: 'TEXT',
   };
   const columns = () => new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
   const existing = columns();
@@ -126,6 +127,7 @@ function toVoice(row) {
     info.duration = row.info_duration;
   }
   if (row.info_uploader?.trim()) info.uploader = row.info_uploader.trim();
+  if (row.info_songcut_text?.trim()) info.songCutText = row.info_songcut_text.trim();
   if (Object.keys(info).length > 0) voice.info = info;
   return voice;
 }
@@ -225,7 +227,7 @@ export function listAudioFiles() {
 export function exportDump(db, filePath) {
   const q = (v) => (v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`);
   const itemColumns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
-  const extraColumns = ['info_duration', 'info_uploader'].filter((name) => itemColumns.has(name));
+  const extraColumns = ['info_duration', 'info_uploader', 'info_songcut_text'].filter((name) => itemColumns.has(name));
   const lines = [
     '-- ============================================================',
     '--  内容快照（由 scripts/content-sync.mjs 自动生成，请勿手工编辑）',

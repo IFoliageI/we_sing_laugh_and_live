@@ -19,6 +19,12 @@ test('artist grouping includes collection members and deduplicates cross-categor
   assert.equal(groupSongsByArtist(groups.slice(1))[0].groupName, result[0].groupName);
 });
 
+test('artist grouping preserves song-cut information text', () => {
+  const song = { ...voice, info: { songCutText: '完整歌切见合集第二集' } };
+  const result = groupSongsByArtist([{ groupName: 'covers', title: 'Covers', voices: [], stacks: [{ voices: [song] }] }]);
+  assert.deepEqual(result[0].voices[0].info, song.info);
+});
+
 test('song share links retain the page route and encode names safely', () => {
   const url = new URL(shareUrl('https://example.test/request/?old=1#group-a', { path: 'songs/曲 #1%.mp3', zh: '曲 & Name' }));
   assert.equal(url.pathname, '/request/');

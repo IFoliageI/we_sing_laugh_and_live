@@ -61,15 +61,20 @@ export function addItem(db, { group, section = 'voice', zh, path: inputPath, ...
     duration = Number(options.duration);
   }
   const uploader = optionalText(options.uploader, 'uploader');
+  const songCutText = optionalText(options['songcut-text'], 'songcut-text');
+  if (songCutText) {
+    if (section !== 'song') throw new Error('歌切指路仅适用于歌单，请使用 --section song。');
+  }
 
   return withTransaction(db, () => {
     const columns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
     const extra = [
       ['info_duration', duration],
       ['info_uploader', uploader],
+      ['info_songcut_text', songCutText],
     ];
     if (extra.some(([name, value]) => value !== null && !columns.has(name))) {
-      throw new Error('数据库尚未支持音频时长 / 上传者，请先执行 pnpm content:upgrade。');
+      throw new Error('数据库缺少对应的信息小卡字段，请先执行 pnpm content:upgrade。');
     }
     const supported = extra.filter(([name]) => columns.has(name));
     const matches = db.prepare(

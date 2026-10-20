@@ -46,6 +46,7 @@ export function verifyContent(content, html, allJs) {
         const fields = [
           voice.zh, voice.path, voice.artist, voice.info?.time, voice.info?.title,
           voice.info?.note, voice.info?.thumb, voice.info?.duration, voice.info?.uploader,
+          voice.info?.songCutText,
         ].filter((value) => value !== undefined && value !== null && value !== '');
         for (const value of fields) {
           fieldCount++;

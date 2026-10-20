@@ -61,6 +61,38 @@ async function assertFits(page) {
   assert.equal(await page.evaluate(() => Array.from(document.querySelectorAll('.app-header__logo')).every((image) => image.complete && image.naturalWidth > 0)), true);
 }
 
+async function mountSongCutFixture(page, label) {
+  await page.goto(new URL('/request/', values.url).href);
+  await page.waitForFunction(() => !document.querySelector('astro-island[ssr]'));
+  await page.evaluate(async (label) => {
+    const source = await (await fetch('/src/components/SoundBoard.tsx')).text();
+    const webImport = source.match(/from\s+["']([^"']*solid-js_web[^"']*)["']/);
+    const { render } = await import(webImport[1]);
+    const { SongBoard } = await import('/src/components/SongBoard.tsx');
+    const { songGroups } = await import('/src/data/songs.ts');
+    const original = [...songGroups];
+    songGroups.splice(0, songGroups.length, {
+      groupName: 'song-cuts', title: 'Song cuts',
+      voices: [
+        { path: 'fixture/cut.mp3', zh: 'Cut song', artist: 'Cut artist', info: { title: '直播片段', songCutText: ` ${label} ` } },
+        { path: 'fixture/plain.mp3', zh: 'Text-only song', info: { songCutText: '<b>合集第二集</b> https://video.example.test/watch?v=ABC' } },
+        { path: 'fixture/blank.mp3', zh: 'Blank song', info: { title: 'Blank title', songCutText: ' \n ' } },
+        { path: 'fixture/legacy.mp3', zh: 'Legacy song', info: { title: 'Legacy title' } },
+      ],
+      stacks: [{
+        title: 'Cut collection', voices: [
+          { path: 'fixture/first.mp3', zh: 'First song', artist: 'Cut artist', info: { songCutText: 'First cut' } },
+          { path: 'fixture/second.mp3', zh: 'Second song', artist: 'Cut artist', info: { songCutText: 'Second cut' } },
+        ],
+      }],
+    });
+    const mount = document.createElement('div');
+    document.querySelector('main').replaceChildren(mount);
+    const dispose = render(() => SongBoard(), mount);
+    window.disposeBoardFixture = () => { dispose(); songGroups.splice(0, songGroups.length, ...original); };
+  }, label);
+}
+
 try {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 320, height: 568 }]) {
     const context = await browser.newContext({ viewport, permissions: ['clipboard-read', 'clipboard-write'] });
@@ -149,6 +181,54 @@ try {
 
   if (!values['skip-fixtures']) {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 320, height: 568 }]) {
+      await check(`song-cut plain text and original card behavior at ${viewport.width}px`, async () => {
+        await page.setViewportSize(viewport);
+        const label = '完整歌切见合集第二集：' + '这段歌曲的演唱现场'.repeat(4);
+        await mountSongCutFixture(page, label);
+        const song = page.getByRole('button', { name: 'Cut song', exact: true });
+        const line = page.locator('.sound-tip__line').filter({ has: page.locator('.sound-tip__k', { hasText: '歌切指路' }) });
+        await song.hover();
+        assert.equal(await page.locator('.sound-info-btn, .sound-tip__close').count(), 0);
+        assert.equal(await line.textContent(), `歌切指路${label}`);
+        assert.equal(await page.locator('.sound-tip a, .sound-tip button').count(), 0);
+        assert.equal(await page.locator('.sound-tip').evaluate((element) => getComputedStyle(element).pointerEvents), 'none');
+        await page.waitForFunction(() => {
+          const element = document.querySelector('.sound-tip');
+          return element && getComputedStyle(element).opacity === '1';
+        });
+        await assertFits(page);
+        const bounds = await page.locator('.sound-tip').boundingBox();
+        assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height);
+        assert.equal(await page.locator('.sound-tip').evaluate((element) => element.scrollWidth <= element.clientWidth), true);
+        await page.screenshot({ path: path.join(artifactDir, `song-cut-${viewport.width}.png`) });
+        assert.equal(await page.locator('.bottom-sheet').count(), 0);
+        await page.mouse.move(viewport.width - 4, viewport.height - 4);
+        assert.equal(await page.locator('.sound-tip').count(), 0);
+        await song.focus();
+        assert.equal(await line.textContent(), `歌切指路${label}`);
+        await page.keyboard.press('Tab');
+        assert.equal(await page.getByRole('button', { name: 'Text-only song', exact: true }).evaluate((element) => element === document.activeElement), true);
+        assert.equal(await line.textContent(), '歌切指路<b>合集第二集</b> https://video.example.test/watch?v=ABC');
+        assert.equal(await line.locator('a, b').count(), 0);
+        await page.getByRole('button', { name: 'Blank song', exact: true }).focus();
+        assert.equal(await line.count(), 0);
+        await page.getByRole('button', { name: 'Legacy song', exact: true }).focus();
+        assert.equal(await line.count(), 0);
+        await page.getByRole('button', { name: '原唱作者', exact: true }).click();
+        await page.getByRole('button', { name: 'Cut song', exact: true }).focus();
+        assert.equal(await line.textContent(), `歌切指路${label}`);
+        await page.getByRole('button', { name: '歌曲类型', exact: true }).click();
+        const stack = page.getByRole('button', { name: 'Cut collection', exact: false });
+        await stack.focus();
+        assert.equal(await line.textContent(), '歌切指路First cut');
+        await stack.dblclick();
+        await page.locator('.search-box input').focus();
+        await stack.focus();
+        assert.equal(await line.textContent(), '歌切指路Second cut');
+        await page.evaluate(() => window.disposeBoardFixture());
+      });
+    }
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 320, height: 568 }]) {
       await check(`card duration and uploader metadata at ${viewport.width}px`, async () => {
         await page.setViewportSize(viewport);
         await page.goto(new URL('/about/', values.url).href);
@@ -165,7 +245,7 @@ try {
             groups: [{
               groupName: 'metadata', title: 'Metadata',
               voices: [
-                { path: 'fixture/info.mp3', zh: 'Metadata clip', info: { duration: 125.75, uploader, thumb: '/thumbs/placeholder.svg' } },
+                { path: 'fixture/info.mp3', zh: 'Metadata clip', info: { duration: 125.75, uploader, thumb: '/thumbs/placeholder.svg', songCutText: 'Song only' } },
                 { path: 'fixture/old.mp3', zh: 'Legacy clip', info: { title: 'Legacy title' } },
                 { path: 'fixture/plain.mp3', zh: 'Plain clip' },
               ],
@@ -183,6 +263,7 @@ try {
         await page.getByRole('button', { name: 'Metadata clip', exact: true }).hover();
         assert.equal(await tipLine('音频时长').textContent(), '音频时长2:05');
         assert.equal(await tipLine('上传者').textContent(), `上传者${uploader}`);
+        assert.equal(await tipLine('歌切指路').count(), 0);
         await page.waitForFunction(() => getComputedStyle(document.querySelector('.sound-tip')).opacity === '1');
         await assertFits(page);
         assert.equal(await page.locator('.sound-tip').evaluate((element) => element.scrollWidth <= element.clientWidth), true);

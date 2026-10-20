@@ -176,10 +176,10 @@ async function cmdAdd() {
 async function cmdUpgrade() {
   const result = await upgradeCardMetadata(db);
   if (!result.changed) {
-    console.log('· 数据库已支持音频时长 / 上传者，无需升级。');
+    console.log('· 数据库的信息小卡字段已是最新，无需升级。');
     return;
   }
-  console.log(`✓ 已增加音频时长 / 上传者字段；升级前备份：${result.backupFile}`);
+  console.log(`✓ 已升级信息小卡可选字段；升级前备份：${result.backupFile}`);
   console.log('下一步：pnpm content:sync');
 }
 
@@ -271,6 +271,7 @@ content:add 的全部选项：
   --thumb  <图片>        缩略图：如 /thumbs/x.png 或 HTTP(S) 图床直链
   --duration <秒数>      音频时长，非负数字，可含小数，如 12.5
   --uploader <显示名>    上传者，与原唱作者分开保存
+  --songcut-text <文字>  歌切指路纯文本（可选，仅 song，不支持点击跳转）
 
 内容源：${path.relative(ROOT, DB_PATH)}
 `);

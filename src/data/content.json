@@ -9,162 +9,22 @@
       {
         "groupName": "Optimism_lyrics",
         "title": "励志类台词(但是从哪里切出来的你别管)",
-        "voices": [
-          {
-            "path": "Optimism_lyrics/示例.mp3",
-            "zh": "示例：励志按钮（改成音效名）",
-            "info": {
-              "time": "2024年3月16日 19:00",
-              "title": "聊聊近况",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ],
-        "stacks": [
-          {
-            "title": "励志合集",
-            "voices": [
-              {
-                "path": "Optimism_lyrics/励志_1.mp3",
-                "zh": "励志 · 第一句",
-                "info": {
-                  "time": "2024年3月16日 19:05",
-                  "title": "聊聊近况 · 片段一",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              },
-              {
-                "path": "Optimism_lyrics/励志_2.mp3",
-                "zh": "励志 · 第二句",
-                "info": {
-                  "time": "2024年3月16日 19:10",
-                  "title": "聊聊近况 · 片段二",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              }
-            ]
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "misc_lyrics",
         "title": "抽象台/歌词",
-        "voices": [
-          {
-            "path": "misc_lyrics/示例.mp3",
-            "zh": "示例：抽象按钮（改成音效名）",
-            "info": {
-              "time": "2024年3月17日 22:45",
-              "title": "口胡大会",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ],
-        "stacks": [
-          {
-            "title": "抽象合集",
-            "voices": [
-              {
-                "path": "misc_lyrics/抽象_1.mp3",
-                "zh": "抽象 · 第一段",
-                "info": {
-                  "time": "2024年3月17日 22:50",
-                  "title": "口胡大会 · 片段一",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              },
-              {
-                "path": "misc_lyrics/抽象_2.mp3",
-                "zh": "抽象 · 第二段",
-                "info": {
-                  "time": "2024年3月17日 22:55",
-                  "title": "口胡大会 · 片段二",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              }
-            ]
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "noise",
         "title": "怪叫",
-        "voices": [
-          {
-            "path": "noise/示例.mp3",
-            "zh": "示例：怪叫按钮（改成音效名）",
-            "info": {
-              "time": "2024年3月18日 20:10",
-              "title": "突发恶疾",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ],
-        "stacks": [
-          {
-            "title": "怪叫合集",
-            "voices": [
-              {
-                "path": "noise/怪叫_1.mp3",
-                "zh": "怪叫 · 第一声",
-                "info": {
-                  "time": "2024年3月18日 20:12",
-                  "title": "突发恶疾 · 片段一",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              },
-              {
-                "path": "noise/怪叫_2.mp3",
-                "zh": "怪叫 · 第二声",
-                "info": {
-                  "time": "2024年3月18日 20:15",
-                  "title": "突发恶疾 · 片段二",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              }
-            ]
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "cats_lyrics",
         "title": "如果你变成了老大的猫猫...?",
-        "voices": [
-          {
-            "path": "cats_lyrics/示例.mp3",
-            "zh": "示例：猫猫按钮（改成音效名）",
-            "info": {
-              "time": "2024年3月19日 23:59",
-              "title": "猫猫代播",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ],
-        "stacks": [
-          {
-            "title": "猫猫合集",
-            "voices": [
-              {
-                "path": "cats_lyrics/猫猫_1.mp3",
-                "zh": "猫猫 · 第一声",
-                "info": {
-                  "time": "2024年3月19日 23:59",
-                  "title": "猫猫代播 · 片段一",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              },
-              {
-                "path": "cats_lyrics/猫猫_2.mp3",
-                "zh": "猫猫 · 第二声",
-                "info": {
-                  "time": "2024年3月20日 00:02",
-                  "title": "猫猫代播 · 片段二",
-                  "thumb": "/thumbs/placeholder.svg"
-                }
-              }
-            ]
-          }
-        ]
+        "voices": []
       }
     ],
     "secretGroup": {
@@ -179,80 +39,17 @@
       {
         "groupName": "song_folk",
         "title": "民谣",
-        "voices": [
-          {
-            "path": "songs/原创_示例1.mp3",
-            "zh": "示例：原创曲目（改成歌名）",
-            "artist": "渺渺渺",
-            "info": {
-              "time": "2024年6月1日 19:00",
-              "title": "原创 · 第一首",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          },
-          {
-            "path": "songs/原创_示例2.mp3",
-            "zh": "示例：原创曲目二（改成歌名）",
-            "artist": "渺渺渺",
-            "info": {
-              "time": "2024年6月2日 19:00",
-              "title": "原创 · 第二首",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "song_rock",
         "title": "摇滚",
-        "voices": [
-          {
-            "path": "songs/原创_示例1.mp3",
-            "zh": "示例：原创曲目（改成歌名）",
-            "artist": "渺渺渺",
-            "info": {
-              "time": "2024年6月1日 19:00",
-              "title": "原创 · 第一首",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          },
-          {
-            "path": "songs/原创_示例2.mp3",
-            "zh": "示例：原创曲目二（改成歌名）",
-            "artist": "渺渺渺",
-            "info": {
-              "time": "2024年6月2日 19:00",
-              "title": "原创 · 第二首",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "song_pop",
         "title": "流行",
-        "voices": [
-          {
-            "path": "songs/原创_示例1.mp3",
-            "zh": "示例：原创曲目（改成歌名）",
-            "artist": "渺渺渺",
-            "info": {
-              "time": "2024年6月1日 19:00",
-              "title": "原创 · 第一首",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          },
-          {
-            "path": "songs/原创_示例2.mp3",
-            "zh": "示例：原创曲目二（改成歌名）",
-            "artist": "渺渺渺",
-            "info": {
-              "time": "2024年6月2日 19:00",
-              "title": "原创 · 第二首",
-              "thumb": "/thumbs/placeholder.svg"
-            }
-          }
-        ]
+        "voices": []
       }
     ]
   }

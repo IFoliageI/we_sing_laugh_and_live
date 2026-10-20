@@ -26,6 +26,8 @@ export interface VoiceInfo {
   duration?: number;
   // 上传者显示名，与原唱作者分开保存
   uploader?: string;
+  // 歌切指路：可选纯文本，仅歌单信息小卡展示
+  songCutText?: string;
   // 其他备注（可选）
   note?: string;
   // 缩略图：public 路径（如 /thumbs/xxx.png）或 HTTP(S) 图床直链；不填则不显示
