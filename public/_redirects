@@ -1,0 +1,47 @@
+# ============================================================
+#  渺の怪动静 / 渺の歌单 —— Cloudflare 重定向
+#  ------------------------------------------------------------------
+#  文件位置：public/_redirects
+#  Astro 会把 public/ 里的文件原样复制到 dist/，部署后位于
+#  dist/_redirects；Cloudflare Pages / Workers 解析它，不对外提供。
+#
+#  格式：每行一条  [来源] [目标] [状态码?]   （状态码默认 302）
+#  · # 开头是注释；规则从上往下匹配，同名来源以最上面一条为准；
+#  · 只支持 301/302/303/307/308，以及 200 的「代理/重写」；
+#    不支持 404 重写，也不看查询串。
+#  · 规则先于 _headers 执行。
+#
+#  官方文档：
+#    Pages   https://developers.cloudflare.com/pages/configuration/redirects/
+#    Workers https://developers.cloudflare.com/workers/static-assets/redirects/
+#    路由判断 https://developers.cloudflare.com/pages/configuration/serving-pages/
+#
+#  ★★ 本站是多页静态站（首页 / 歌单 / 关于 都是真实存在的 HTML 文件），
+#     所以【绝对不要】写下面这种规则：
+#         /*  /index.html  200
+#     它会把所有不存在的地址都伪装成 200 的首页，
+#     404 从此消失、搜索引擎收录一堆重复页面。
+#     需要真 404 请加 src/pages/404.astro 让 Astro 产出 dist/404.html。
+# ============================================================
+
+# ---------- 目录型页面统一带尾斜杠 ----------
+# Astro 产出的是 /request/index.html、/about/index.html，
+# 用显式 301 钉住规范地址，避免同一页面出现 /about 与 /about/ 两份。
+/request        /request/       301
+/about          /about/         301
+
+# ---------- 直接命中 index.html 的旧链接 ----------
+# Cloudflare 本身会把 /about/index.html 重定向到 /about/，
+# 这几条是显式声明，保证换平台/换行为时地址仍然固定。
+/index.html          /           301
+/request/index.html  /request/   301
+/about/index.html    /about/     301
+
+# ---------- 说明：为什么这里没有通配规则 ----------
+# 1) 本站不是 SPA，没有前端路由需要兜底；
+# 2) 没产出 404.html 时，Pages 会自动用「SPA 兜底」把未匹配路径
+#    一律返回首页 —— 这是平台行为，_redirects 反而不该再叠加一层；
+# 3) 将来若启用子路径部署（SITE_BASE），这里的来源路径要跟着加前缀，
+#    例：/we_sing_laugh_and_live/request  /we_sing_laugh_and_live/request/  301
+#    （Cloudflare 侧不支持像 GitHub Pages 那样整站挂在子路径下，
+#      见 docs/部署-Cloudflare-GitHubPages.md 第 5 节）

@@ -1,0 +1,121 @@
+# ============================================================
+#  渺の怪动静 / 渺の歌单 —— GitHub Pages 部署流水线
+#  ------------------------------------------------------------------
+#  产物：pnpm build 生成的 dist/，整目录作为 Pages artifact 上传。
+#  流程：checkout → pnpm → Node → 装依赖 → 跑测试 → 构建 → 上传 → 部署
+#
+#  为什么值得先跑 pnpm test：
+#    tests/*.test.mjs 覆盖内容数据库读取、路径编码等纯逻辑，
+#    构建挂了通常测试也会先红，能在上传 artifact 之前就失败。
+#
+#  首次使用前必须在仓库里做一次设置（Settings → Pages）：
+#    Build and deployment → Source 选 **GitHub Actions**。
+#
+#  ★ SITE_BASE / SITE_URL 的现状：
+#    astro.config.mjs 已能读取这两个变量（→ Astro 的 base / site），
+#    源码里原来的 4 处硬编码绝对路径也已改成走 import.meta.env.BASE_URL
+#    （统一在 src/lib/asset-url.ts 里拼前缀）。
+#    因此本文件在构建步里传 SITE_BASE=/<仓库名>/ 就能把项目页发布在
+#    https://<owner>.github.io/<repo>/ 子路径下。
+#    注意：这条链路只在本会话的沙盒外验证过代码，构建本身未实测，
+#    首次部署请按 docs/部署-Cloudflare-GitHubPages.md 第 5.3 节自查。
+#
+#  官方文档：
+#    https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages
+#    https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+# ============================================================
+name: 部署到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # 允许在 Actions 页面手动重跑（换主题、只改内容时很方便）
+  workflow_dispatch:
+
+# 最小权限集：
+#   contents: read   —— 只读仓库代码
+#   pages: write     —— 向 GitHub Pages 发布
+#   id-token: write  —— deploy-pages 用它换取 OIDC 令牌，缺了会直接失败
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个 Pages 部署在跑；
+# 不取消进行中的部署（cancel-in-progress: false），避免站点停在半套文件上。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ------------------------------------------------------------
+  #  构建：产出 dist/ 并上传为 Pages artifact
+  # ------------------------------------------------------------
+  build:
+    name: 构建静态产物
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v7
+
+      # 必须排在 setup-node 之前：setup-node 的 cache: pnpm 依赖已就绪的 pnpm
+      - name: 安装 pnpm 11
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.21.0
+          # 依赖安装交给下一步的 pnpm install，这里不重复跑
+          run_install: false
+
+      # 版本来自仓库根目录的 .node-version（24.19.0），
+      # 与本地 / Cloudflare Pages 构建环境共用同一份来源
+      - name: 安装 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 运行测试
+        run: pnpm test
+
+      # 项目页（https://<owner>.github.io/<repo>/）必须带子路径前缀。
+      # astro.config.mjs 会把 SITE_BASE 变成 Astro 的 base，进而决定
+      # import.meta.env.BASE_URL；源码里的站内绝对路径统一走 src/lib/asset-url.ts。
+      # 换成「用户主页」或「自定义域名」部署时，把 SITE_BASE 改成 / 即可
+      # （SITE_URL 同步改成自定义域名）。
+      - name: 构建站点
+        env:
+          SITE_BASE: /${{ github.event.repository.name }}/
+          SITE_URL: ${{ format('https://{0}.github.io/{1}', github.repository.owner, github.event.repository.name) }}
+        run: pnpm build
+
+      # 说明：这里不需要也不应该塞 .nojekyll ——
+      #   · 走 Actions artifact 发布时 GitHub Pages 不经过 Jekyll，
+      #     _astro/ 这类下划线目录不会被吞掉；
+      #   · 只有「从分支发布」（把 dist 提交到 gh-pages 分支）时才需要
+      #     .nojekyll，那种方式见部署文档第 4.2 节。
+      #   若将来确实要把隐藏文件放进产物，需要给本步骤加：
+      #     include-hidden-files: true
+      - name: 打包 Pages 产物
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  # ------------------------------------------------------------
+  #  部署：把上一步的 artifact 发布到 Pages
+  # ------------------------------------------------------------
+  deploy:
+    name: 发布到 GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署 artifact
+        id: deployment
+        uses: actions/deploy-pages@v5

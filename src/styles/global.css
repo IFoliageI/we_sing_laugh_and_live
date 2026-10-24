@@ -518,13 +518,10 @@ html.dark .about-card a:hover { color: var(--accent-300); }
 /* ============================================================
    Segoe Fluent Icons 图标体系
    使用字体：public/fonts/SegoeFluentIcons.ttf
+   @font-face 已移到 BaseLayout.astro 的 <head> 中注入：
+   CSS 文件里拿不到 import.meta.env.BASE_URL，字体的绝对路径需要按部署基路径拼接。
    码位以真实字体 cmap 校验为准（微软官方指南）
    ============================================================ */
-@font-face {
-  font-family: 'SegoeFluentIcons';
-  src: url('/fonts/SegoeFluentIcons.ttf') format('truetype');
-  font-display: swap;
-}
 
 .sficon {
   font-family: 'SegoeFluentIcons';

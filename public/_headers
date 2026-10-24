@@ -1,0 +1,91 @@
+# ============================================================
+#  渺の怪动静 / 渺の歌单 —— Cloudflare 响应头
+#  ------------------------------------------------------------------
+#  文件位置：public/_headers
+#  Astro 会把 public/ 里的文件原样复制到 dist/，所以部署后它位于
+#  dist/_headers。Cloudflare Pages / Workers 会在部署时解析它，
+#  它本身不会被当成静态资源对外提供。
+#
+#  格式（每个规则块）：
+#      /路径或模式
+#        Header-Name: value
+#  · 路径行顶格写，响应头行必须缩进；
+#  · # 开头是注释；
+#  · 模式里只允许一个 *（贪心匹配）；
+#  · 最多 100 条规则，单行 ≤ 2000 字符；
+#  · 同一请求命中多个规则时，各规则的响应头会【合并】；
+#    同名响应头会被逗号拼起来 —— 所以 Cache-Control 只在一个规则里写。
+#
+#  官方文档：
+#    Pages   https://developers.cloudflare.com/pages/configuration/headers/
+#    Workers https://developers.cloudflare.com/workers/static-assets/headers/
+#
+#  这份文件与 部署/nginx.conf 的缓存策略保持一致：
+#    HTML 不缓存 / _astro 不可变长缓存 / 字体与图标 30 天。
+# ============================================================
+
+# ---------- 全站基础安全头 ----------
+# 说明：Pages/Workers 默认就会带 nosniff 与 Referrer-Policy，
+# 这里显式写出来，是为了换平台（比如以后回 nginx）时策略一致。
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# ---------- HTML 页面：不做长缓存 ----------
+# 站点是多页静态站，三个入口：/、/request/、/about/。
+# `/` 命中首页；`/*/` 命中所有目录型页面（/request/、/about/）。
+# 部署后要让改动立刻可见，所以 HTML 一律走 revalidate。
+/
+  Cache-Control: no-cache
+
+/*/
+  Cache-Control: no-cache
+
+# 直接请求某个 .html（Cloudflare 通常会先把它重定向到无扩展名地址，
+# 这里兜住剩下的一小部分情况）
+/*.html
+  Cache-Control: no-cache
+
+# ---------- 带内容哈希的构建产物：永久缓存 ----------
+# _astro/ 下的文件名带哈希，内容一变文件名就变，可以放心 immutable。
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ---------- 图标字体 ----------
+# .ttf 的 Content-Type 默认由上传时按扩展名推断；部分环境会退化成
+# application/octet-stream，浏览器会拒绝加载字体（图标变方块）。
+# 这里显式钉成 font/ttf —— 与 nginx.conf 里手动补 types 是同一件事。
+# 注意：只写这一条，不在这里写 Cache-Control，避免与 /fonts/* 合并后冲突。
+/*.ttf
+  Content-Type: font/ttf
+
+# ---------- 静态素材：30 天 ----------
+# fonts/ icons/ thumbs/ 里的文件是"随内容走"的素材，补文件不需要改代码；
+# 给 30 天缓存，既省流量又能让新素材在合理时间内替换。
+/fonts/*
+  Cache-Control: public, max-age=2592000
+
+/icons/*
+  Cache-Control: public, max-age=2592000
+
+/thumbs/*
+  Cache-Control: public, max-age=2592000
+
+# ---------- 音频：7 天 ----------
+# 歌单/音效会因内容更新而换文件，缓存不宜太长；
+# 播放器拖动进度条依赖 Range 请求，Cloudflare 对带 Range 的请求
+# 本来就不会套用这份缓存头（见官方 serving 文档），所以这里安全。
+/audio/*
+  Cache-Control: public, max-age=604800
+
+# ---------- 可选：预览域名不进搜索引擎 ----------
+# 打开下面两段后，*.pages.dev / *.*.pages.dev 的预览地址不会被索引
+# （绑定的自定义域名不受影响）。默认注释掉，避免误伤正式域名。
+#
+# https://:project.pages.dev/*
+#   X-Robots-Tag: noindex
+#
+# https://:version.:project.pages.dev/*
+#   X-Robots-Tag: noindex

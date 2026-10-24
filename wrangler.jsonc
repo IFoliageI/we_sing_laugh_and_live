@@ -1,0 +1,52 @@
+{
+  // ============================================================
+  //  渺の怪动静 / 渺の歌单 —— Cloudflare Pages 部署配置
+  //  官方文档：
+  //    Pages 的 Wrangler 配置
+  //      https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+  //    Pages 构建设置（构建命令 / 输出目录）
+  //      https://developers.cloudflare.com/pages/configuration/build-configuration/
+  //  说明：
+  //    · 本站是纯静态站，output: 'static'，构建期只读本地 SQLite，
+  //      产物在 dist/，没有任何运行时数据库或 Functions。
+  //    · 只要出现 pages_build_output_dir，这个文件就是 Pages 项目的
+  //      「唯一配置来源」：同名/同类的字段之后在 Cloudflare 面板里只能看不能改。
+  //      所以第一次提交前请先确认面板里的项目名与本文件的 name 一致。
+  // ============================================================
+  "$schema": "./node_modules/wrangler/config-schema.json",
+
+  // Pages 项目名：只允许小写字母、数字、连字符（下划线不行）。
+  // 它与 Pages 面板里创建的项目同名；用 wrangler pages deploy 时若不指定
+  // 项目名，也会读这里。
+  "name": "we-sing-laugh-and-live",
+
+  // Workers 运行时的兼容日期（Pages Functions 用得到）。
+  // 本站没有 Functions，但这一项是 Pages 配置的必填字段，取接入当天的日期即可；
+  // 以后需要新运行时特性时再往上调。
+  "compatibility_date": "2026-10-24",
+
+  // 构建输出目录：Astro 的 dist/ 就是 Pages 要发布的静态产物根目录。
+  // 用 GitHub 集成时，Pages 会执行构建命令（pnpm build）后从这里取文件；
+  // 用 wrangler pages deploy 时，这个目录会被直接上传。
+  "pages_build_output_dir": "./dist"
+
+  // ------------------------------------------------------------
+  //  D1：故意不在这里启用
+  // ------------------------------------------------------------
+  //  下面的字段即便打开，也【只对 Pages Functions 的运行时可见】
+  //  （也就是 context.env.DB），astro build 阶段根本拿不到 binding：
+  //    https://developers.cloudflare.com/pages/functions/bindings/
+  //  本站的内容源是本地 SQLite（data/content.db），构建期由
+  //  scripts/content-sync.mjs → src/data/content.json 生成；如果以后要在
+  //  构建期读取远程 D1，唯一可行的是 D1 的 REST 查询接口
+  //  （scripts/lib/content-source.mjs 的 d1 模式），而不是这里的 binding。
+  //  真的需要给 Pages Functions 用时，再取消注释并填 database_id：
+  //
+  //  "d1_databases": [
+  //    {
+  //      "binding": "DB",              // 仅 Pages Functions 运行时可用
+  //      "database_name": "yuki-content",
+  //      "database_id": "<在此填写 D1 database_id，不要提交真实凭据>"
+  //    }
+  //  ],
+}
