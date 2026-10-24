@@ -17,8 +17,10 @@
 #    （统一在 src/lib/asset-url.ts 里拼前缀）。
 #    因此本文件在构建步里传 SITE_BASE=/<仓库名>/ 就能把项目页发布在
 #    https://<owner>.github.io/<repo>/ 子路径下。
-#    注意：这条链路只在本会话的沙盒外验证过代码，构建本身未实测，
-#    首次部署请按 docs/部署-Cloudflare-GitHubPages.md 第 5.3 节自查。
+#    注意：该链路已于 2026-10-24 用 SITE_BASE=/we_sing_laugh_and_live/ 实测构建通过
+#    （子路径下首页 / 歌单 / 关于 / favicon / icons / 字体 / CSS 全部 200，根路径 404，
+#      客户端 bundle 已注入 base 且无 import.meta.env 残留）。
+#    首次真正部署仍建议按 docs/部署-Cloudflare-GitHubPages.md 第 5.3 节自查。
 #
 #  官方文档：
 #    https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages
@@ -27,9 +29,11 @@
 name: 部署到 GitHub Pages
 
 on:
-  push:
-    branches: [main]
-  # 允许在 Actions 页面手动重跑（换主题、只改内容时很方便）
+  # ⚠️ 当前仅手动触发（Actions 页面 → 选中本工作流 → Run workflow）。
+  # 这是刻意的：过渡期只把代码推送到 GitHub，不让推送自动发布站点。
+  # 准备正式上线时，取消下面两行注释即可恢复「推 main 自动部署」：
+  #   push:
+  #     branches: [main]
   workflow_dispatch:
 
 # 最小权限集：
