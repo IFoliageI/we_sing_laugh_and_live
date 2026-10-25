@@ -7,8 +7,8 @@
 >
 > **本次状态（2026-10-24）**：新增 `wrangler.jsonc`、`.github/workflows/deploy.yml`、`.node-version`、
 > `public/_headers`、`public/_redirects` 与本文件。子路径支持（`SITE_BASE` / `SITE_URL` → Astro 的 `base` / `site`）
-> 已由主线落地到 `astro.config.mjs`、`src/lib/asset-url.ts` 与 4 处调用点，但**本会话没能跑通一次子路径构建做实测**
-> （沙盒内 `astro build` 被拒绝，见第 9 节）；首次真机部署请按 5.3 节的验收步骤自查一遍。
+> 已由主线落地到 `astro.config.mjs`、`src/lib/asset-url.ts` 与 4 处调用点，并**已于 2026-10-24 实测通过**
+> （默认根路径与 `/we_sing_laugh_and_live/` 子路径均构建成功；子路径下首页 / 歌单 / 关于 / favicon / icons / 字体 / CSS 全部 200，根路径 404）。
 
 ---
 
@@ -38,7 +38,7 @@
 > ★ **一句话结论**：三条路线都可以走，但验证程度不同。
 > - **Cloudflare Pages**（根路径）：今天就能上，不需要任何代码改动，只需面板配置；
 > - **GitHub Pages**（`/<仓库名>/` 子路径）：子路径机制已由主线落地（`astro.config.mjs` + `src/lib/asset-url.ts`），
->   但**还差一次真实构建验证**——本会话沙盒里跑不了 `astro build`（见第 9 节）；
+>   并已**于 2026-10-24 实测通过**（见第 5 节）；
 > - **Cloudflare Workers**：需要另建一份 `wrangler.worker.jsonc`（第 3 节给了模板，仓库里没有该文件）。
 
 ---
@@ -213,7 +213,7 @@ Worker 默认给 `<name>.<子域>.workers.dev`；自定义域名要求该域名�
 ### 4.1 仓库设置（一次性）
 
 1. Settings → **Pages** → Build and deployment → **Source 选「GitHub Actions」**（不要选「Deploy from a branch」）。
-2. push 到 `main` 即触发 `.github/workflows/deploy.yml`；也可以在 Actions 页手动 `Run workflow`。
+2. 当前 `.github/workflows/deploy.yml` **仅 `workflow_dispatch` 手动触发**：Actions 页 → 选中本工作流 → `Run workflow`；需要推送自动部署时，取消 `deploy.yml` 里 `push:` / `branches: [main]` 两行注释。
 3. 部署完成后地址是 `https://<owner>.github.io/<仓库名>/`（本项目即 `.../we_sing_laugh_and_live/`）。
 
 流水线做过的事：
@@ -328,15 +328,15 @@ const base = normalizedBase ? `/${normalizedBase}/` : '';
 
 ### 5.3 验收步骤（请在有权限的环境跑一遍）
 
-> ⚠️ 本会话的沙盒里 `astro build` 跑不起来（Vite 在 Windows 需要 spawn 子进程，被沙盒以 EPERM 拒绝），
-> 所以下面四条**没有实测**，请第一次部署时逐条自查。
+> ✅ 子路径链路已于 2026-10-24 实测通过：默认根路径与 `SITE_BASE=/we_sing_laugh_and_live/` 构建均成功。
+> 下面四条保留作后续回归步骤。
 
 1. **默认路径回归**（不设任何变量）：
    ```bash
    pnpm build
    ```
-   期望：`src/data/content.json` 的 SHA256 仍是
-   `3BD9991FB37D405A4DD6A0990A442298F7683BB5ECD5981C742CF620CFD4B10D`；
+   期望：`src/data/content.json` 的 SHA256 为
+   `C2B3904999246DF00F905A68A05EA79F1ED422EE88828A5CB16C4EE6AC9A6C94`；
    `dist/index.html` 里的资源仍是 `/_astro/...`（不带前缀）。
 2. **子路径构建**：
    ```bash
@@ -423,7 +423,7 @@ const base = normalizedBase ? `/${normalizedBase}/` : '';
 | 缓存/响应头来自 | `nginx.conf` | `public/_headers` | 平台默认（不可改） |
 | 404 行为 | `try_files $uri $uri/ =404` → 真 404 | 有无 `404.html` 决定（见 6.1） | GitHub 默认 404 页 |
 | 字体 MIME | 配置里手动补 `types` 块 | `_headers` 里 `/*.ttf` | 不可控 |
-| 部署方式 | `tar` + `scp` + 解压 | git push 自动构建 / CLI 上传 | git push 自动构建 |
+| 部署方式 | `tar` + `scp` + 解压 | git push 自动构建 / CLI 上传 | 手动 `Run workflow`（当前仅 `workflow_dispatch`） |
 
 要点：
 
@@ -433,7 +433,7 @@ const base = normalizedBase ? `/${normalizedBase}/` : '';
    - GitHub Pages 一律不解析，服务器上会多出这两个文件，无害。
 3. 本次部署配套改动**没有动** `部署/nginx.conf` 与 `部署/部署指南.md`，nginx 部署路径保持原样可用；
    子路径适配是主线在 `astro.config.mjs`、`src/lib/asset-url.ts` 与 4 处调用点上完成的（第 5 节）。
-4. 迁移顺序建议：先让 Cloudflare Pages 跑通（根路径，最简单、零代码改动）→ 按 5.3 节验证一次子路径构建 →
+4. 迁移顺序建议：先让 Cloudflare Pages 跑通（根路径，最简单、零代码改动）→ 按 5.3 节做一次子路径回归 →
    再开 GitHub Pages → nginx 留作内网/备用。
 
 ---
@@ -481,19 +481,19 @@ const base = normalizedBase ? `/${normalizedBase}/` : '';
 | Cloudflare Pages 真实部署（GitHub 集成 / `wrangler pages deploy`） | ❌ **未实测**：没有 Cloudflare 账号与凭据 |
 | Cloudflare Workers `wrangler deploy`（`wrangler.worker.jsonc` 只是示例） | ❌ **未实测**：同上；这份配置也**没有**写进仓库 |
 | GitHub Pages 真实发布 | ❌ **未跑通**：workflow 只做了语法与版本核对，未在真实仓库触发 |
-| `SITE_BASE` / `SITE_URL` 生效 | ⚠️ **代码已落地、但没实测**：`astro.config.mjs` 已读取，沙盒内跑不了 `astro build`（见下方说明） |
+| `SITE_BASE` / `SITE_URL` 生效 | ✅ **已实测通过（2026-10-24）**：默认根路径与 `/we_sing_laugh_and_live/` 子路径均构建成功，子路径资源全部 200、根路径 404 |
 | `_headers` 能否覆盖 `.ttf` 的 `Content-Type` | ⚠️ **未实测**：规则按官方语法写，上线后用 `curl -I` 复核（见 6.2） |
 | `_redirects` 的 301 实际响应 | ⚠️ **未实测**：需上线后 `curl -I .../about` 看 `location` |
 | 构建期 D1 REST 取数 | ⚠️ 仅有 mock 单测（见交接材料），无真实 D1 库 |
 
-> **沙盒限制（不是仓库问题）**：本会话里 `pnpm test` 与 `pnpm build` 都在**启动子进程**时被拒绝
+> **沙盒限制（不是仓库问题）**：未获完全权限的沙盒会话里，`pnpm test` 与 `pnpm build` 都在**启动子进程**时被拒绝
 > （`node --test` 会为每个测试文件 spawn 子进程；Astro/Vite 在 Windows 上也要 spawn 一次做路径解析）。
 > 绕过办法：`node --test --experimental-test-isolation=none <测试文件…>` 可以在同进程内跑完
-> （本次 71 个用例全绿）；`astro build` 没有等价开关，需要在沙盒外或有权限的环境跑。
+> （当前 81 个用例全绿）；`astro build` 没有等价开关，需要在沙盒外或有权限的环境跑。
 >
 > 已经实际确认过的：
 > - `data/content.db` 与 `src/data/content.json` 都在 git 里（云构建必须能读到它们）；
-> - `src/data/content.json` 的 SHA256 在本次改动前后未变（`3BD9991F…CFD4B10D`）；
+> - `src/data/content.json` 的 SHA256 在当前内容库下为 `C2B39049…AC9A6C94`（与 5.3 节一致）；
 > - `.github/workflows/deploy.yml` 用 JavaScript 的 YAML 解析器（js-yaml）解析通过，且权限块、
 >   步骤顺序（checkout → pnpm → node → install → test → build → upload → deploy）、
 >   `needs` / `environment` / 版本号都做了断言检查；
