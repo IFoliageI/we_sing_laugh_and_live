@@ -16,7 +16,7 @@ export function SongBoard() {
       <div class="page-head">
         <div>
           <div class="page-title">渺の歌单</div>
-          <div class="page-sub">想歌回前提前听听渺渺唱唱?点一下就好咕咕!</div>
+          <div class="page-sub">想在歌回前听听渺渺唱唱?点一下就好咕咕!</div>
         </div>
         <div class="mode-switch" role="group" aria-label="展示方式">
           <button
@@ -40,7 +40,7 @@ export function SongBoard() {
         showSongCut={true}
         searchPlaceholder="搜索歌曲…"
         noResultWord="歌曲"
-        emptyGroupText="(本组暂无歌曲,待一只巨型咕咕咕手动填入咕)"
+        emptyGroupText="(本组暂无歌曲咕,正在等一只巨型咕咕咕手动填入咕)"
         noAudioText="这首还没来得及注入音频文件咕"
         emptyHint={SONG_EMPTY_HINT}
       />

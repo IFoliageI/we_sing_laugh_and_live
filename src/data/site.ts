@@ -31,5 +31,5 @@ export const sideLinks: Links[] = [
 //   加一行 = 多一个友链；删一行 = 少一个友链；全删光（保持 []）= 侧边栏自动隐藏「友链」这一栏。
 // 下面留了一行注释好的例子，去掉行首的 // 并改成你自己的即可生效。
 export const friendLinks: Links[] = [
-  { title: '友站', url: 'https://example.com', icon: '/icons/external-link.ico' },
+  { title: 'TransformJPGのBlog', url: 'https://transformjpg.cloud/', icon: '/icons/TransformJPGのBlog.ico' },
 ];
