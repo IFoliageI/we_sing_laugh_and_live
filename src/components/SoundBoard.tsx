@@ -50,7 +50,7 @@ export function SoundBoard(props: BoardOptions = {}) {
   const secretOn = () => props.enableSecret ?? true;
   const searchPlaceholder = () => props.searchPlaceholder ?? '搜索音效…';
   const noResultWord = () => props.noResultWord ?? '动静';
-  const emptyGroupText = () => props.emptyGroupText ?? '（本组暂无音效，待主人填入 mp3）';
+  const emptyGroupText = () => props.emptyGroupText ?? '（咕咕咕）';
   const noAudioText = () => props.noAudioText ?? '这条音效还没有注入音频文件哦';
   const emptyHint = () => props.emptyHint ?? EMPTY_HINT;
 
@@ -334,7 +334,7 @@ export function SoundBoard(props: BoardOptions = {}) {
       <Show when={matchedGroups().length === 0}>
         <div class="no-result">
           <Show when={query().trim()} fallback={emptyHint()}>
-            没有搜到关于“{query()}”的{noResultWord()}
+            没找到到关于“{query()}”的{noResultWord()}咕
           </Show>
         </div>
       </Show>
