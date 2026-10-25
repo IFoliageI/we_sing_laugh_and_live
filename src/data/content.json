@@ -19,64 +19,12 @@
       {
         "groupName": "noise",
         "title": "怪叫",
-        "voices": [
-          {
-            "path": "noise/demo-1.mp3",
-            "zh": "普通怪叫（无图标）",
-            "info": {
-              "time": "2026年10月20日 20:00",
-              "title": "演示：不带特效"
-            }
-          },
-          {
-            "path": "noise/demo-2.mp3",
-            "zh": "特效怪叫（左侧有图标）",
-            "specialEffect": true,
-            "info": {
-              "time": "2026年10月20日 20:01",
-              "title": "演示：带特效"
-            }
-          },
-          {
-            "path": "noise/demo-3.mp3",
-            "zh": "第二个特效示例",
-            "specialEffect": true,
-            "info": {
-              "duration": 12.5,
-              "uploader": "演示上传者"
-            }
-          }
-        ],
-        "stacks": [
-          {
-            "title": "怪叫合集（演示）",
-            "voices": [
-              {
-                "path": "noise/stack-1.mp3",
-                "zh": "合集成员（无图标）"
-              },
-              {
-                "path": "noise/stack-2.mp3",
-                "zh": "合集成员（有图标）",
-                "specialEffect": true
-              }
-            ]
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "cats_lyrics",
         "title": "如果你变成了老大的猫猫...?",
-        "voices": [
-          {
-            "path": "cats_lyrics/demo-1.mp3",
-            "zh": "猫猫特效示例",
-            "specialEffect": true,
-            "info": {
-              "title": "演示：猫猫组也有图标"
-            }
-          }
-        ]
+        "voices": []
       }
     ],
     "secretGroup": {
@@ -91,22 +39,7 @@
       {
         "groupName": "song_folk",
         "title": "民谣",
-        "voices": [
-          {
-            "path": "songs/demo-1.mp3",
-            "zh": "民谣示例·带特效",
-            "artist": "示例歌手",
-            "specialEffect": true,
-            "info": {
-              "songCutText": "完整歌切见合集第二集，从副歌开始"
-            }
-          },
-          {
-            "path": "songs/demo-2.mp3",
-            "zh": "民谣示例·普通",
-            "artist": "示例歌手"
-          }
-        ]
+        "voices": []
       },
       {
         "groupName": "song_rock",
