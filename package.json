@@ -25,7 +25,10 @@
     "content:verify": "node scripts/content-verify.mjs",
     "content:dump": "node scripts/content-cli.mjs dump",
     "content:migrate": "node scripts/content-migrate.mjs",
-    "content:help": "node scripts/content-cli.mjs help"
+    "content:help": "node scripts/content-cli.mjs help",
+
+    "d1:push": "node scripts/d1-push.mjs",
+    "d1:export": "node scripts/d1-export.mjs"
   },
   "dependencies": {
     "@astrojs/solid-js": "^4.4.1",

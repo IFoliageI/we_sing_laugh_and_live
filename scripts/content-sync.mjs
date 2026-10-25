@@ -1,26 +1,41 @@
 // ============================================================
-//  内容同步：data/content.db  →  src/data/content.json
+//  内容同步：内容源  →  src/data/content.json
 //
 //  用法：
-//      node scripts/content-sync.mjs
+//      node scripts/content-sync.mjs                       # 默认：本地 data/content.db
+//      CONTENT_SOURCE=d1 node scripts/content-sync.mjs     # 构建期从 Cloudflare D1 REST 读取
 //
-//  - 每次 pnpm build / pnpm dev 都会自动先跑一遍，保证 JSON 与数据库一致。
+//  - 每次 pnpm build / pnpm dev 都会自动先跑一遍，保证 JSON 与内容源一致。
+//  - 默认（local）路径与改造前完全一致：content.json 逐字节不变、content-dump.sql 仍生成、日志不变。
 //  - 内容没变化时不会改写文件（避免无意义的 git 改动与时间戳抖动）。
 //  - 生成结果里不含时间戳，方便 git diff 审阅。
+//  - 架构红线：D1 只在本构建脚本里通过 REST 读取，不引入任何运行时数据库/接口。
 // ============================================================
 import path from 'node:path';
-import { openDb, loadSection, exportDump, writeIfChanged, CONTENT_JSON, DATA_DIR, SECTIONS } from './lib/db.mjs';
+import { CONTENT_JSON, DATA_DIR, SECTIONS, writeIfChanged } from './lib/db.mjs';
+import { createContentSource } from './lib/content-source.mjs';
 
-function syncContent(db) {
-  const content = {
-    _generated: {
+/** 生成物头部说明：local 模式下的两个字符串必须与改造前逐字节一致。 */
+function generatedMetadata(source) {
+  if (source.mode === 'local') {
+    return {
       note: '本文件由 scripts/content-sync.mjs 自动生成，请勿手工编辑；内容源是 data/content.db',
       source: 'data/content.db',
-    },
+    };
+  }
+  return {
+    note: '本文件由 scripts/content-sync.mjs 自动生成，请勿手工编辑；内容源是 Cloudflare D1（构建期 REST 读取）',
+    source: 'Cloudflare D1',
+  };
+}
+
+async function syncContent(source) {
+  const content = {
+    _generated: generatedMetadata(source),
   };
   const summary = [];
   for (const section of Object.keys(SECTIONS)) {
-    const data = loadSection(db, section);
+    const data = await source.loadSection(section);
     content[section] = {
       hint: data.hint,
       groups: data.groups,
@@ -52,17 +67,30 @@ function syncContent(db) {
         (entry.stackCount ? ` / ${entry.stackCount} 个合集` : '')
     );
   }
-  if (exportDump(db, path.join(DATA_DIR, 'content-dump.sql'))) {
+  if (await source.writeDump(path.join(DATA_DIR, 'content-dump.sql'))) {
     console.log('✓ 已更新 data/content-dump.sql（内容快照，便于 git diff）');
   }
 }
 
-const db = openDb({ readOnly: true });
-try {
-  // 一个读事务保证 JSON 和 SQL 快照来自同一版本，兼容桌面工具同时编辑。
-  db.exec('BEGIN;');
-  syncContent(db);
-  db.exec('COMMIT;');
-} finally {
-  db.close();
+async function main() {
+  const source = createContentSource();
+  try {
+    // 默认 local 模式不打印额外日志，保证改造前的输出一字不差
+    if (source.mode !== 'local') {
+      console.log(`· 数据源：${source.describe()}`);
+    }
+    await syncContent(source);
+  } finally {
+    source.close();
+  }
 }
+
+main().catch((error) => {
+  // D1 相关失败给出人话原因而不是抛一堆栈（默认 local 路径行为不变）
+  if (error?.name === 'D1ConfigError' || error?.name === 'D1ApiError') {
+    console.error(`✖ ${error.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  throw error;
+});
