@@ -19,7 +19,7 @@ export const site = {
 export interface Links {
   title: string;
   url: string;
-  icon: string; // 图标：图片地址（侧边栏外链专用，如 /icons/external-link.svg）
+  icon: string; // 图标：图片地址（侧边栏外链专用，如 /icons/external-link.ico）
 }
 
 export const sideLinks: Links[] = [
