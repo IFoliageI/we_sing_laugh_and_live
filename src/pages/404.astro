@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { assetUrl } from '../lib/asset-url';
+
+// 静态 404 页：Astro 会把它输出为 dist/404.html。
+// Cloudflare Pages / Workers 在没有 404.html 时会把未知路径回落到首页并返回 200，
+// 有了这个文件才会正确返回 404 状态码。
+---
+<BaseLayout title="页面不存在 - 渺の怪动静播放器">
+  <div class="page-title">404</div>
+  <div class="page-sub">这里没有怪动静，回首页听听吧</div>
+  <div class="about-card">
+    <ul>
+      <li><a href={assetUrl('/')}>← 返回首页</a></li>
+      <li><a href={assetUrl('/request/')}>渺の歌单</a></li>
+    </ul>
+  </div>
+</BaseLayout>
